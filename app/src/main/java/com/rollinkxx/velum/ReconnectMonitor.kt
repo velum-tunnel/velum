@@ -80,6 +80,10 @@ object ReconnectMonitor {
             return
         }
         callback = cb
+        // Callback awal untuk default network yang sudah aktif sengaja didebounce. Boot atau
+        // update tetap perlu satu pemicu recovery eksplisit agar tunnel tidak macet DOWN bila
+        // percobaan pertama gagal sementara network tidak berubah lagi.
+        recoverIfNeeded(app, VelumRecoveryDecision.Trigger.BOOT_OR_UPDATE)
     }
 
     /** Berhenti memantau; aman dipanggil berulang. Panggil saat putus manual. */
@@ -113,6 +117,44 @@ object ReconnectMonitor {
      * alasan yang sah untuk memantulkannya. `getNetworkCapabilities(Network)` ada sejak
      * API 23 dan `TRANSPORT_VPN` sejak API 21 — keduanya di bawah minSdk 24.
      */
+    /** Jadwalkan recovery tanpa menunggu perubahan network; aman dipanggil berulang. */
+    fun recoverIfNeeded(context: Context, trigger: VelumRecoveryDecision.Trigger) {
+        val app = context.applicationContext
+        if (bouncing) return
+        lastBounceMs = SystemClock.elapsedRealtime()
+        bouncing = true
+        val gen = VelumTunnel.currentIntent
+        worker.execute {
+            try {
+                val prefs = try {
+                    Prefs.of(app)
+                } catch (e: KeystoreUnavailableException) {
+                    VelumLog.w(TAG, "recovery dibatalkan: penyimpanan aman tidak tersedia", e)
+                    return@execute
+                }
+                VelumTunnel.refreshState(app)
+                val should = VelumRecoveryDecision.shouldSchedule(
+                    trigger = trigger,
+                    wasUp = prefs.wasUp,
+                    registered = prefs.isRegistered,
+                    tunnelUp = VelumTunnel.state == Tunnel.State.UP,
+                    bouncing = false,
+                    intentStale = VelumTunnel.intentStale(gen)
+                )
+                if (!should) return@execute
+                if (VelumTunnel.state != Tunnel.State.UP) {
+                    tryUpOnce(app, prefs, gen)
+                } else if (trigger == VelumRecoveryDecision.Trigger.NETWORK) {
+                    bounceWithBackoff(app, prefs, gen)
+                }
+            } catch (e: Exception) {
+                VelumLog.w(TAG, "recovery otomatis gagal", e)
+            } finally {
+                bouncing = false
+            }
+        }
+    }
+
     private fun fromOwnTunnel(app: Context, network: Network): Boolean = try {
         app.getSystemService(ConnectivityManager::class.java)
             ?.getNetworkCapabilities(network)
@@ -122,6 +164,10 @@ object ReconnectMonitor {
     }
 
     private fun scheduleBounce(app: Context, reason: String) {
+        if (VelumTunnel.state != Tunnel.State.UP) {
+            recoverIfNeeded(app, VelumRecoveryDecision.Trigger.NETWORK)
+            return
+        }
         val now = SystemClock.elapsedRealtime()
         if (now - lastBounceMs < DEBOUNCE_MS || bouncing) return
         lastBounceMs = now

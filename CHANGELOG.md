@@ -44,6 +44,15 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
   turun / API < 29), subjudul kembali ke teks netral — tidak menebak.
 
 ### Changed
+- **Swipe Recent Apps tidak lagi memutus VPN**: penghancuran Activity hanya melepaskan UI;
+  `wasUp`, tunnel, dan pemantau reconnect dipertahankan. Disconnect tetap dilakukan oleh aksi
+  koneksi eksplisit yang sudah ada, bukan oleh penutupan task UI.
+
+- **Recovery otomatis diperluas**: boot/update mendapat pemicu recovery eksplisit walaupun
+  network default sudah tersedia, dan transisi tunnel ke `DOWN` dapat menjadwalkan pemulihan
+  selama niat pengguna masih `wasUp=true`. Keduanya memakai guard generasi niat dan satu
+  keputusan murni yang diuji JVM agar aksi Putuskan tetap menang.
+
 - **Judul aplikasi membesar (30sp → 80sp) dan berkesan timbul 3D**: lapisan gelap sedikit
   turun di belakang lapisan bergradien emas, menempel ke atas layar. Judul dijamin **satu
   baris penuh** lewat `maxLines=1` + `singleLine=true` + auto-size (48–80sp) + letter-spacing
