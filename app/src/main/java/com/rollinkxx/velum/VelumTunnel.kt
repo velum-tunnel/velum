@@ -114,6 +114,11 @@ object VelumTunnel : Tunnel {
         }
         updateNotification(newState)
         listener?.invoke(newState)
+        if (newState == Tunnel.State.DOWN) {
+            // Putus manual sudah lebih dulu menulis wasUp=false dan menaikkan generasi niat;
+            // recovery otomatis karena state DOWN akan langsung batal pada guard yang sama.
+            appContext?.let { ReconnectMonitor.recoverIfNeeded(it, VelumRecoveryDecision.Trigger.TUNNEL_DOWN) }
+        }
     }
 
     /**
@@ -163,20 +168,6 @@ object VelumTunnel : Tunnel {
     @Throws(Exception::class)
     fun down(context: Context) {
         backend(context).setState(this, Tunnel.State.DOWN, null)
-    }
-
-    /**
-     * Cleanup khusus saat task aplikasi dihapus dari Recent Apps. Seluruh operasi
-     * berjalan dalam satu kunci tunnel dan aman dipanggil ulang.
-     */
-    @Synchronized
-    fun shutdownFromTaskRemoval(context: Context) {
-        val app = context.applicationContext
-        bumpIntent()
-        Prefs.of(app).wasUp = false
-        ReconnectMonitor.stop(app)
-        runCatching { down(app) }
-        StatusNotifier.hide(app)
     }
 
     /**
