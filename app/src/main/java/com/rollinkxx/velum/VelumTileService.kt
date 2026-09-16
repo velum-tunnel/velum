@@ -82,8 +82,24 @@ class VelumTileService : TileService() {
                             VelumLog.i(TAG, "aksi ubin (sambung) dibatalkan: ada niat yang lebih baru")
                         } else {
                             VelumTunnel.up(app, prefs)
-                            prefs.wasUp = true
-                            ReconnectMonitor.ensure(app)
+                            val handshake = VelumConnectionContract.awaitHandshake(
+                                app,
+                                VelumConnectionContract.HANDSHAKE_WAIT_MS
+                            ) { VelumTunnel.intentStale(gen) }
+                            if (VelumConnectionContract.accepted(
+                                    tunnelUp = VelumTunnel.state == Tunnel.State.UP,
+                                    handshakeReady = handshake,
+                                    intentStale = VelumTunnel.intentStale(gen)
+                                )
+                            ) {
+                                prefs.wasUp = true
+                                ReconnectMonitor.ensure(app)
+                            } else {
+                                runCatching { VelumTunnel.down(app) }
+                                prefs.wasUp = false
+                                ReconnectMonitor.stop(app)
+                                VelumLog.w(TAG, "aksi ubin sambung gagal: handshake tidak terbukti")
+                            }
                         }
                     }
                 }

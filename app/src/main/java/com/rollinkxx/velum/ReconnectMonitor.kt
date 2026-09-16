@@ -41,8 +41,8 @@ object ReconnectMonitor {
     @Volatile
     private var lastBounceMs = 0L
 
-    @Volatile
-    private var bouncing = false
+    /** Claim atomik: callback network dan recovery state-down tidak boleh membuat dua job. */
+    private val bouncing = VelumRecoveryClaim()
 
     /**
      * Apakah pemantau sedang terdaftar pada jaringan default.
@@ -120,9 +120,8 @@ object ReconnectMonitor {
     /** Jadwalkan recovery tanpa menunggu perubahan network; aman dipanggil berulang. */
     fun recoverIfNeeded(context: Context, trigger: VelumRecoveryDecision.Trigger) {
         val app = context.applicationContext
-        if (bouncing) return
+        if (!bouncing.tryClaim()) return
         lastBounceMs = SystemClock.elapsedRealtime()
-        bouncing = true
         val gen = VelumTunnel.currentIntent
         worker.execute {
             try {
@@ -150,7 +149,7 @@ object ReconnectMonitor {
             } catch (e: Exception) {
                 VelumLog.w(TAG, "recovery otomatis gagal", e)
             } finally {
-                bouncing = false
+                bouncing.release()
             }
         }
     }
@@ -169,9 +168,9 @@ object ReconnectMonitor {
             return
         }
         val now = SystemClock.elapsedRealtime()
-        if (now - lastBounceMs < DEBOUNCE_MS || bouncing) return
+        if (now - lastBounceMs < DEBOUNCE_MS) return
+        if (!bouncing.tryClaim()) return
         lastBounceMs = now
-        bouncing = true
         // Pemantau BUKAN pelaku niat: ia menegakkan niat yang sudah ada. Karena itu ia
         // mengingat generasi saat dijadwalkan (tanpa menaikkannya) dan berhenti begitu
         // pelaku lain — layar utama, ubin, receiver — menyatakan niat yang lebih baru.
@@ -200,7 +199,7 @@ object ReconnectMonitor {
                 VelumLog.i(TAG, "jaringan $reason: memantul tunnel")
                 bounceWithBackoff(app, prefs, gen)
             } finally {
-                bouncing = false
+                bouncing.release()
             }
         }
     }
@@ -233,6 +232,20 @@ object ReconnectMonitor {
                     return
                 }
                 VelumTunnel.up(app, prefs)
+                val handshake = VelumConnectionContract.awaitHandshake(
+                    app,
+                    VelumConnectionContract.HANDSHAKE_WAIT_MS
+                ) { VelumTunnel.intentStale(gen) }
+                if (!VelumConnectionContract.accepted(
+                        tunnelUp = VelumTunnel.state == Tunnel.State.UP,
+                        handshakeReady = handshake,
+                        intentStale = VelumTunnel.intentStale(gen)
+                    )
+                ) {
+                    runCatching { VelumTunnel.down(app) }
+                    VelumLog.w(TAG, "sambung ulang latar gagal: handshake tidak terbukti")
+                    return
+                }
                 // Segarkan penanda waktu SETELAH berhasil, bukan hanya saat menjadwalkan:
                 // peristiwa jaringan susulan yang dipicu oleh kenaikan tunnel ini sendiri
                 // harus tetap tertahan debounce.
@@ -265,8 +278,16 @@ object ReconnectMonitor {
                 // tidak berarti apa-apa bila pengguna bertindak selama tidur.
                 if (VelumTunnel.intentStale(gen)) return
                 VelumTunnel.up(app, prefs)
-                VelumTunnel.refreshState(app)
-                if (VelumTunnel.state == Tunnel.State.UP) {
+                val handshake = VelumConnectionContract.awaitHandshake(
+                    app,
+                    VelumConnectionContract.HANDSHAKE_WAIT_MS
+                ) { VelumTunnel.intentStale(gen) }
+                if (VelumConnectionContract.accepted(
+                        tunnelUp = VelumTunnel.state == Tunnel.State.UP,
+                        handshakeReady = handshake,
+                        intentStale = VelumTunnel.intentStale(gen)
+                    )
+                ) {
                     // Sama seperti di `tryUpOnce`: keberhasilan pada percobaan ke-2/ke-3
                     // terjadi LEBIH dari 3 detik setelah jadwal, jadi tanpa penyegaran ini
                     // peristiwa jaringan susulan lolos debounce dan memicu pantulan baru
@@ -275,6 +296,7 @@ object ReconnectMonitor {
                     VelumLog.i(TAG, "pantulan tunnel berhasil")
                     return
                 }
+                runCatching { VelumTunnel.down(app) }
             } catch (e: Exception) {
                 VelumLog.w(TAG, "pantulan tunnel gagal, coba lagi", e)
             }

@@ -508,18 +508,7 @@ class VelumController(context: Context, private val ui: Ui) {
      * senyap yang sudah terbukti di lapangan (lihat dokumen kelas ini).
      */
     private fun awaitHandshake(maxWaitMs: Long): Boolean {
-        val deadline = SystemClock.elapsedRealtime() + maxWaitMs
-        while (SystemClock.elapsedRealtime() < deadline) {
-            if (dead) return false
-            if (VelumTunnel.state != Tunnel.State.UP) return false
-            if ((VelumTunnel.traffic(app)?.latestHandshakeMs ?: 0L) > 0L) return true
-            try {
-                Thread.sleep(HANDSHAKE_POLL_MS)
-            } catch (_: InterruptedException) {
-                return false
-            }
-        }
-        return false
+        return VelumConnectionContract.awaitHandshake(app, maxWaitMs) { dead }
     }
 
     /** Mencatat endpoint yang terbukti menghasilkan handshake (bukti > perkiraan RTT). */
@@ -709,9 +698,9 @@ class VelumController(context: Context, private val ui: Ui) {
         const val TAG = "Velum"
 
         /** Batas menunggu handshake sebelum uji trace dijalankan. */
-        const val HANDSHAKE_WAIT_MS = 8000L
+        const val HANDSHAKE_WAIT_MS = VelumConnectionContract.HANDSHAKE_WAIT_MS
         /** Validasi handshake saat connect memakai batas yang sama dengan uji otomatis. */
-        const val CONNECT_HANDSHAKE_WAIT_MS = 8000L
+        const val CONNECT_HANDSHAKE_WAIT_MS = VelumConnectionContract.HANDSHAKE_WAIT_MS
         /**
          * Batas verifikasi handshake untuk SETIAP kandidat pengganti pada rotasi.
          * Sengaja lebih ketat dari [CONNECT_HANDSHAKE_WAIT_MS]: kandidat utama diberi
@@ -727,7 +716,6 @@ class VelumController(context: Context, private val ui: Ui) {
          * endpoint yang berbeda, jadi wajar bila handshake-nya butuh beberapa detik lagi.
          */
         const val HANDSHAKE_WAIT_RETRY_MS = 10000L
-        const val HANDSHAKE_POLL_MS = 250L
         /** Jeda ulangan bila hasil uji negatif padahal tunnel masih UP. */
         const val TEST_RETRY_MS = 1500L
         const val MAX_TEST_ATTEMPTS = 2
