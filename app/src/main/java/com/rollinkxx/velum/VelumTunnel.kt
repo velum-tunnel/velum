@@ -101,6 +101,28 @@ object VelumTunnel : Tunnel {
     /** Apakah generasi [gen] sudah digantikan pelaku lain yang lebih baru. */
     fun intentStale(gen: Int): Boolean = intentGen.get() != gen
 
+    /** Menetapkan memo UP hanya bila generasi pemanggil masih memegang intent terbaru. */
+    @Synchronized
+    fun markUpIfCurrent(prefs: Prefs, gen: Int): Boolean {
+        if (intentGen.get() != gen) return false
+        return prefs.setWasUpDurable(true)
+    }
+
+    /** Menghapus memo UP hanya bila pekerjaan ini masih pemilik intent. */
+    @Synchronized
+    fun clearUpIfCurrent(prefs: Prefs, gen: Int): Boolean {
+        if (intentGen.get() != gen) return false
+        return prefs.setWasUpDurable(false)
+    }
+
+    /** Membatalkan intent dan memo UP sebagai satu operasi terhadap koneksi lama. */
+    @Synchronized
+    fun cancelIntent(prefs: Prefs): Int {
+        val gen = intentGen.incrementAndGet()
+        prefs.setWasUpDurable(false)
+        return gen
+    }
+
     override fun getName(): String = NAME
 
     override fun onStateChange(newState: Tunnel.State) {
@@ -152,7 +174,11 @@ object VelumTunnel : Tunnel {
     @Synchronized
     fun refreshState(context: Context): Tunnel.State {
         val s = backend(context).getState(this)
-        state = s
+        // Jangan hanya menulis field `state`: proses baru harus menjalankan bookkeeping
+        // lifecycle yang sama seperti callback backend (durasi, notifikasi, listener, dan
+        // guard recovery). Tanpa ini backend bisa UP sementara sesi lokal tetap berdurasi 0
+        // dan UI tidak pernah menerima transisi DOWN->UP.
+        onStateChange(s)
         return s
     }
 
@@ -183,10 +209,10 @@ object VelumTunnel : Tunnel {
      */
     @Synchronized
     @Throws(Exception::class)
-    fun restart(context: Context, prefs: Prefs) {
+    fun restart(context: Context, prefs: Prefs, shouldContinue: () -> Boolean = { prefs.wasUp }) {
         val b = backend(context)
         b.setState(this, Tunnel.State.DOWN, null)
-        if (!prefs.wasUp) return // pengguna memutus selama operasi ini mengantre
+        if (!shouldContinue()) return // intent baru membatalkan sebelum tunnel dihidupkan lagi
         b.setState(this, Tunnel.State.UP, buildConfig(prefs))
     }
 

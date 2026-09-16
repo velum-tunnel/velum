@@ -231,17 +231,7 @@ object ReconnectMonitor {
                     VelumLog.i(TAG, "sambung ulang latar dibatalkan: ada niat pengguna yang lebih baru")
                     return
                 }
-                VelumTunnel.up(app, prefs)
-                val handshake = VelumConnectionContract.awaitHandshake(
-                    app,
-                    VelumConnectionContract.HANDSHAKE_WAIT_MS
-                ) { VelumTunnel.intentStale(gen) }
-                if (!VelumConnectionContract.accepted(
-                        tunnelUp = VelumTunnel.state == Tunnel.State.UP,
-                        handshakeReady = handshake,
-                        intentStale = VelumTunnel.intentStale(gen)
-                    )
-                ) {
+                if (!VelumConnectionContract.connect(app, prefs) { VelumTunnel.intentStale(gen) }) {
                     runCatching { VelumTunnel.down(app) }
                     VelumLog.w(TAG, "sambung ulang latar gagal: handshake tidak terbukti")
                     return
@@ -277,17 +267,7 @@ object ReconnectMonitor {
                 // Jeda di atas bisa 60 detik: niat yang dibaca sebelum tidur sudah
                 // tidak berarti apa-apa bila pengguna bertindak selama tidur.
                 if (VelumTunnel.intentStale(gen)) return
-                VelumTunnel.up(app, prefs)
-                val handshake = VelumConnectionContract.awaitHandshake(
-                    app,
-                    VelumConnectionContract.HANDSHAKE_WAIT_MS
-                ) { VelumTunnel.intentStale(gen) }
-                if (VelumConnectionContract.accepted(
-                        tunnelUp = VelumTunnel.state == Tunnel.State.UP,
-                        handshakeReady = handshake,
-                        intentStale = VelumTunnel.intentStale(gen)
-                    )
-                ) {
+                if (VelumConnectionContract.connect(app, prefs) { VelumTunnel.intentStale(gen) }) {
                     // Sama seperti di `tryUpOnce`: keberhasilan pada percobaan ke-2/ke-3
                     // terjadi LEBIH dari 3 detik setelah jadwal, jadi tanpa penyegaran ini
                     // peristiwa jaringan susulan lolos debounce dan memicu pantulan baru

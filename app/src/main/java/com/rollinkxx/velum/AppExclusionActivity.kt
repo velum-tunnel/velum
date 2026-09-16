@@ -142,7 +142,14 @@ class AppExclusionActivity : AppCompatActivity() {
         Toast.makeText(this, R.string.excluded_saved_restarting, Toast.LENGTH_SHORT).show()
         worker.execute {
             try {
-                VelumTunnel.restart(app, prefs)
+                if (!VelumConnectionContract.reconnect(
+                        app,
+                        prefs,
+                        VelumConnectionContract.HANDSHAKE_WAIT_MS
+                    ) { !prefs.wasUp }
+                ) {
+                    VelumLog.w(TAG, "pengecualian aplikasi tidak menghasilkan handshake")
+                }
             } catch (e: Exception) {
                 VelumLog.w(TAG, "gagal menyambungkan ulang setelah pengecualian disimpan", e)
             }

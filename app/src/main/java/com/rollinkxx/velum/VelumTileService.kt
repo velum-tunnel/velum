@@ -25,7 +25,7 @@ class VelumTileService : TileService() {
 
     override fun onStartListening() {
         super.onStartListening()
-        updateTile()
+        refreshTileState()
     }
 
     /**
@@ -43,15 +43,19 @@ class VelumTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val app = applicationContext
-        val wasUp = VelumTunnel.state == Tunnel.State.UP
-        if (!wasUp && VpnService.prepare(app) != null) {
-            // Belum ada persetujuan VPN: hanya aplikasi yang bisa memintanya.
-            openApp()
-            return
-        }
         worker.execute {
             val prefs = Prefs.of(app)
             try {
+                // State lokal di-reset saat proses lahir ulang; backend adalah sumber
+                // kebenaran untuk menentukan aksi tile, bukan nilai default DOWN.
+                VelumTunnel.refreshState(app)
+                val wasUp = VelumTunnel.state == Tunnel.State.UP
+                if (!wasUp && VpnService.prepare(app) != null) {
+                    // Belum ada persetujuan VPN: hanya aplikasi yang bisa memintanya.
+                    openApp()
+                    updateTile()
+                    return@execute
+                }
                 if (!wasUp && !prefs.isRegistered) {
                     // Belum terdaftar: registrasi butuh layar untuk menampilkan hasilnya.
                     // Sengaja TIDAK menaikkan generasi niat di jalur ini — membuka aplikasi
@@ -65,39 +69,27 @@ class VelumTileService : TileService() {
                     // `connect()` milik layar menulis `wasUp = true` + menyalakan pemantau
                     // lagi, dan tunnel yang baru dimatikan membangkitkan dirinya sendiri
                     // pada peristiwa jaringan berikutnya.
-                    val gen = VelumTunnel.bumpIntent()
                     if (wasUp) {
-                        if (VelumTunnel.intentStale(gen)) {
-                            VelumLog.i(TAG, "aksi ubin (putus) dibatalkan: ada niat yang lebih baru")
-                        } else {
-                            prefs.wasUp = false
-                            ReconnectMonitor.stop(app)
-                            VelumTunnel.down(app)
-                        }
+                        VelumTunnel.cancelIntent(prefs)
+                        ReconnectMonitor.stop(app)
+                        VelumTunnel.down(app)
                     } else {
+                        val gen = VelumTunnel.bumpIntent()
                         // Proba endpoint bisa makan ~6 detik: niat pengguna bisa berubah di
                         // dalamnya, jadi diperiksa ulang tepat sebelum tunnel disentuh.
                         EndpointProbe.refresh(prefs)
                         if (VelumTunnel.intentStale(gen)) {
                             VelumLog.i(TAG, "aksi ubin (sambung) dibatalkan: ada niat yang lebih baru")
                         } else {
-                            VelumTunnel.up(app, prefs)
-                            val handshake = VelumConnectionContract.awaitHandshake(
-                                app,
-                                VelumConnectionContract.HANDSHAKE_WAIT_MS
-                            ) { VelumTunnel.intentStale(gen) }
-                            if (VelumConnectionContract.accepted(
-                                    tunnelUp = VelumTunnel.state == Tunnel.State.UP,
-                                    handshakeReady = handshake,
-                                    intentStale = VelumTunnel.intentStale(gen)
-                                )
+                            if (VelumConnectionContract.connect(app, prefs) { VelumTunnel.intentStale(gen) } &&
+                                VelumTunnel.markUpIfCurrent(prefs, gen)
                             ) {
-                                prefs.wasUp = true
                                 ReconnectMonitor.ensure(app)
                             } else {
-                                runCatching { VelumTunnel.down(app) }
-                                prefs.wasUp = false
-                                ReconnectMonitor.stop(app)
+                                if (VelumTunnel.clearUpIfCurrent(prefs, gen)) {
+                                    runCatching { VelumTunnel.down(app) }
+                                    ReconnectMonitor.stop(app)
+                                }
                                 VelumLog.w(TAG, "aksi ubin sambung gagal: handshake tidak terbukti")
                             }
                         }
@@ -116,6 +108,13 @@ class VelumTileService : TileService() {
             tile.state =
                 if (VelumTunnel.state == Tunnel.State.UP) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
             tile.updateTile()
+        }
+    }
+
+    private fun refreshTileState() {
+        worker.execute {
+            runCatching { VelumTunnel.refreshState(applicationContext) }
+            updateTile()
         }
     }
 
