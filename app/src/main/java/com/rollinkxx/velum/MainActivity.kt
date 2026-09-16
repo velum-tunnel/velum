@@ -313,7 +313,14 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
             Toast.makeText(this, R.string.endpoint_saved_restarting, Toast.LENGTH_SHORT).show()
             endpointWorker.execute {
                 try {
-                    VelumTunnel.restart(applicationContext, prefs)
+                    if (!VelumConnectionContract.reconnect(
+                            applicationContext,
+                            prefs,
+                            VelumConnectionContract.HANDSHAKE_WAIT_MS
+                        ) { !prefs.wasUp }
+                    ) {
+                        VelumLog.w(TAG, "endpoint manual tidak menghasilkan handshake")
+                    }
                 } catch (e: Exception) {
                     VelumLog.w(TAG, "gagal menyambungkan ulang setelah endpoint manual disimpan", e)
                 }

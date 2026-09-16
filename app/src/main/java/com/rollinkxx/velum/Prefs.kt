@@ -119,6 +119,15 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putBoolean(K_WAS_UP, v).apply()
 
     /**
+     * Menetapkan memo lifecycle secara durabel. Nilai ini menentukan apakah boot/recovery
+     * boleh menghidupkan VPN setelah proses mati, sehingga `apply()` tidak cukup untuk
+     * jalur pembatalan atau keberhasilan koneksi.
+     */
+    @SuppressLint("ApplySharedPref")
+    fun setWasUpDurable(value: Boolean): Boolean =
+        sp.edit().putBoolean(K_WAS_UP, value).commit()
+
+    /**
      * Rekaman percobaan sambung ulang otomatis terakhir oleh [BootReceiver], dalam format
      * [VelumDiagnostics.encodeBoot] (`outcome|durationMs|atEpochMs`); null bila belum pernah.
      *

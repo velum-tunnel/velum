@@ -96,17 +96,7 @@ class BootReceiver : BroadcastReceiver() {
                     VelumLog.i(TAG, "$action: sambung ulang dibatalkan: ada niat pengguna yang lebih baru")
                     hasil = VelumDiagnostics.BOOT_SKIPPED
                 } else {
-                    VelumTunnel.up(context, prefs)
-                    val handshake = VelumConnectionContract.awaitHandshake(
-                        context,
-                        VelumConnectionContract.HANDSHAKE_WAIT_MS
-                    ) { VelumTunnel.intentStale(gen) }
-                    if (VelumConnectionContract.accepted(
-                            tunnelUp = VelumTunnel.state == com.wireguard.android.backend.Tunnel.State.UP,
-                            handshakeReady = handshake,
-                            intentStale = VelumTunnel.intentStale(gen)
-                        )
-                    ) {
+                    if (VelumConnectionContract.connect(context, prefs) { VelumTunnel.intentStale(gen) }) {
                         hasil = VelumDiagnostics.BOOT_OK
                     } else {
                         runCatching { VelumTunnel.down(context) }

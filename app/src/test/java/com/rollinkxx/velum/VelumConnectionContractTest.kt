@@ -11,6 +11,17 @@ import org.junit.Test
 
 class VelumConnectionContractTest {
     @Test
+    fun semuaEntryPointMemakaiAturanHandshakeYangSama() {
+        val entryPoints = listOf("tile", "boot", "reconnect", "fallback", "process-recreation")
+        for (entryPoint in entryPoints) {
+            assertFalse("$entryPoint tidak boleh menerima State.UP tanpa handshake",
+                VelumConnectionContract.accepted(true, false, false))
+            assertTrue("$entryPoint menerima koneksi tervalidasi",
+                VelumConnectionContract.accepted(true, true, false))
+        }
+    }
+
+    @Test
     fun tileTidakBolehMenganggapStateUpSebagaiKoneksiTanpaHandshake() {
         assertFalse(VelumConnectionContract.accepted(tunnelUp = true, handshakeReady = false, intentStale = false))
         assertTrue(VelumConnectionContract.accepted(tunnelUp = true, handshakeReady = true, intentStale = false))
@@ -82,6 +93,21 @@ class VelumConnectionContractTest {
         pool.shutdownNow()
         assertEquals(1, winners.count { it })
         assertEquals(1, winners.count { !it })
+        claim.release()
+        claim.release()
+        assertTrue(claim.tryClaim())
+    }
+
+    @Test
+    fun aturanAcceptedMenolakIntentYangBerubahWalauHandshakeSudahAda() {
+        assertFalse(VelumConnectionContract.accepted(true, true, true))
+    }
+
+    @Test
+    fun claimRecoveryTetapEksklusifSetelahReleaseBerulang() {
+        val claim = VelumRecoveryClaim()
+        assertTrue(claim.tryClaim())
+        claim.release()
         claim.release()
         assertTrue(claim.tryClaim())
     }

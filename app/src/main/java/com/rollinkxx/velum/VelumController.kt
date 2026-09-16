@@ -264,16 +264,12 @@ class VelumController(context: Context, private val ui: Ui) {
                     ui.setStatusText(R.string.status_connecting)
                     ui.refreshStaticInfo()
                 }
-                VelumTunnel.up(app, prefs)
-                // Tandai niat UP sebelum fallback endpoint: `restart()` memakai memo
-                // ini untuk memutuskan apakah ia boleh menyalakan tunnel kembali.
-                // Monitor belum diaktifkan sampai handshake tervalidasi di bawah.
-                prefs.wasUp = true
+                val connected = VelumConnectionContract.connect(app, prefs, CONNECT_HANDSHAKE_WAIT_MS) { stale(gen) }
                 // State.UP hanya membuktikan antarmuka TUN berhasil dibuat. Endpoint
                 // yang dipilih lewat RTT TCP/443 belum membuktikan bahwa UDP/2408
                 // (WireGuard) dapat dilewati pada jaringan ini. Jangan menyatakan
                 // koneksi berhasil sebelum handshake nyata terlihat.
-                if (!awaitHandshake(CONNECT_HANDSHAKE_WAIT_MS)) {
+                if (!connected) {
                     if (stale(gen)) return@submit
                     if (!tryValidatedEndpointFallback(gen)) {
                         throw IOException("endpoint WireGuard tidak menghasilkan handshake")
@@ -282,8 +278,11 @@ class VelumController(context: Context, private val ui: Ui) {
                 // Niat dibaca ulang SETELAH up(): bila pengguna menekan Putuskan selama
                 // penyambungan, jangan menimpa niatnya dan jangan hidupkan pemantau lagi.
                 if (stale(gen)) return@submit
+                if (!VelumTunnel.markUpIfCurrent(prefs, gen)) {
+                    if (stale(gen)) return@submit
+                    throw IOException("memo koneksi tidak dapat disimpan")
+                }
                 rememberWorkingEndpoint()
-                prefs.wasUp = true // memo untuk sambung ulang saat boot
                 ReconnectMonitor.ensure(app)
                 onUi { setBusy(false); applyState(VelumTunnel.state) }
             } catch (e: Exception) {
@@ -303,7 +302,7 @@ class VelumController(context: Context, private val ui: Ui) {
                }
                 // Koneksi yang gagal tidak boleh meninggalkan TUN/VPN aktif tanpa
                 // niat yang tervalidasi dan tanpa pemantau yang konsisten.
-                prefs.wasUp = false
+                VelumTunnel.clearUpIfCurrent(prefs, gen)
                 ReconnectMonitor.stop(app)
                 runCatching { VelumTunnel.down(app) }
                 fail(R.string.err_connect, e)
@@ -366,8 +365,7 @@ class VelumController(context: Context, private val ui: Ui) {
                 return@pickVerified false
             }
             val ok = try {
-                VelumTunnel.restart(app, prefs)
-                awaitHandshake(VERIFIED_HANDSHAKE_WAIT_MS)
+                VelumConnectionContract.reconnect(app, prefs, VERIFIED_HANDSHAKE_WAIT_MS) { stale(gen) }
             } catch (e: Exception) {
                 VelumLog.w(TAG, "gagal membangun ulang dengan kandidat endpoint", e)
                 false
@@ -392,13 +390,12 @@ class VelumController(context: Context, private val ui: Ui) {
     }
 
     fun disconnect() {
-        nextIntent()
+        VelumTunnel.cancelIntent(prefs)
         // Putuskan juga harus membatalkan retry uji yang tertunda; jika tidak, retry
         // dapat menulis kembali status uji setelah tunnel sudah dimatikan pengguna.
         cancelPendingTest()
         setBusy(true)
         onUi { ui.setStatusText(R.string.status_disconnecting) }
-        prefs.wasUp = false // putus manual: jangan sambung lagi saat boot
         ReconnectMonitor.stop(app)
         submit(worker) {
             runCatching { VelumTunnel.down(app) }
@@ -409,10 +406,9 @@ class VelumController(context: Context, private val ui: Ui) {
     /** Hapus registrasi dan putuskan; UI bertanggung jawab meminta konfirmasi dulu. */
     fun reset() {
         if (busy) return
-        nextIntent()
+        VelumTunnel.cancelIntent(prefs)
         setBusy(true)
         cancelPendingTest()
-        prefs.wasUp = false // daftar ulang manual = putus permanen: jangan sambung saat boot
         ReconnectMonitor.stop(app)
         submit(worker) {
             runCatching { VelumTunnel.down(app) }
@@ -633,7 +629,9 @@ class VelumController(context: Context, private val ui: Ui) {
                 VelumLog.w(TAG, "endpoint efektif tidak berpindah; uji ulang memakai host yang sama")
                 return
             }
-            VelumTunnel.restart(app, prefs)
+            if (!VelumConnectionContract.reconnect(app, prefs, HANDSHAKE_WAIT_RETRY_MS) { !prefs.wasUp }) {
+                VelumLog.w(TAG, "rotasi endpoint tidak menghasilkan handshake")
+            }
             onUi { ui.refreshStaticInfo() }
         } catch (e: Exception) {
             VelumLog.w(TAG, "putar endpoint & sambung ulang gagal", e)
