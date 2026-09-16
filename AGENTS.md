@@ -3,6 +3,10 @@
 Dokumen ini mengikat setiap agen coding yang bekerja di repo ini. Isinya diturunkan dari
 keadaan repo yang nyata dan dari kesepakatan dengan maintainer. Bagian yang bertanda
 **[direncanakan]** belum ada di repo dan baru berlaku setelah dibuat.
+Untuk prosedur toolchain yang aman, lihat [kebijakan referensi](docs/autonomous-toolchain-policy.md),
+[panduan setup](docs/toolchain-setup-guide.md), dan [batas konfirmasi](docs/confirmation-boundaries.md).
+Dokumen-dokumen tersebut tidak memberikan otorisasi permanen dan tidak mengalahkan aturan
+platform, sandbox, atau perintah eksplisit maintainer.
 Bila fakta di §5 berubah, perbarui dokumen ini dalam **1 commit khusus** berjudul
 `docs: sinkronisasi AGENTS.md` — jangan menumpuk perubahan aturan bersama perubahan kode.
 
