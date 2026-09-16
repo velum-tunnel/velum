@@ -11,7 +11,40 @@ rg -n 'VelumTunnel\.(up|restart)\(' app/src/main/java \
   || true
 
 printf '%s\n' '== direct wasUp writes =='
-rg -n '(^|[^[:alnum:]_])([A-Za-z0-9_]+\.)?wasUp[[:space:]]*=' app/src/main/java || true
+find app/src/main/java -type f -name '*.kt' -print0 |
+  xargs -0 awk '
+    function clean(line,    start, end, prefix, suffix) {
+      # Remove block comments while retaining the source line number.
+      while (in_block) {
+        end = index(line, "*/")
+        if (!end) return ""
+        line = substr(line, end + 2)
+        in_block = 0
+      }
+      while ((start = index(line, "/*")) != 0) {
+        end = index(substr(line, start + 2), "*/")
+        if (!end) {
+          line = substr(line, 1, start - 1)
+          in_block = 1
+          break
+        }
+        end += start + 1
+        prefix = substr(line, 1, start - 1)
+        suffix = substr(line, end + 2)
+        line = prefix suffix
+      }
+      sub(/\/\/.*/, "", line)
+      return line
+    }
+    {
+      code = clean($0)
+      # Report member mutation (`prefs.wasUp = ...`), not reads or named
+      # arguments (`wasUp = Prefs.of(...).wasUp`) in data-class constructors.
+      if (code ~ /\.[[:space:]]*wasUp[[:space:]]*=/) {
+        print FILENAME ":" FNR ":" $0
+      }
+    }
+  ' || true
 
 printf '%s\n' '== handshake/contract call sites =='
 rg -n 'VelumConnectionContract\.(connect|reconnect)|awaitHandshake|accepted\(' app/src/main/java app/src/test || true
