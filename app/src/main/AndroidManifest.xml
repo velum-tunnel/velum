@@ -85,20 +85,24 @@
              menyatakan `specialUse` yang tidak dipakai justru menuntut pembenaran di Play
              Console untuk sesuatu yang tidak ada.
 
-             Yang menahan proses tetap hidup selama tunnel UP adalah **VPN yang aktif**
-             (VpnService yang sudah `establish()`), bukan layanan latar depan. Bila kelak
-             layanan ini memang dipromosikan ke foreground, tipe yang benar untuk aplikasi
-             VPN adalah `systemExempted` — prasyarat runtime-nya di dokumentasi resmi
-             menyebut "VPN apps (configured using Settings > Network & Internet > VPN)" —
-             bukan `specialUse`. -->
+             Catatan: Android mendokumentasikan bahwa aplikasi VPN yang dimulai di latar
+             harus mempromosikan VpnService ke foreground. Versi library ini tidak memanggil
+             `startForeground()`, sehingga ketahanan terhadap pembunuhan proses oleh vendor
+             perangkat tidak dapat dijamin hanya dari manifest. `stopWithTask=false` di bawah
+             mencegah sistem menghentikan service semata-mata karena task di-swipe, tetapi
+             pengujian pada perangkat nyata tetap wajib. -->
         <service
             android:name="com.wireguard.android.backend.GoBackend$VpnService"
             android:exported="false"
+            android:stopWithTask="false"
             tools:node="merge"
             android:permission="android.permission.BIND_VPN_SERVICE">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
+            <meta-data
+                android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
+                android:value="true" />
         </service>
     </application>
 </manifest>
