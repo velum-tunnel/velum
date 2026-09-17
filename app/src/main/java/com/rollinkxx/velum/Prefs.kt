@@ -280,32 +280,20 @@ class Prefs(context: Context) {
         /**
          * Membuka penyimpanan terenkripsi, hanya itu.
          *
-         * Kegagalan pertama dicoba pulihkan SEKALI: penyebab tersering adalah berkas
-         * prefs terenkripsi yang rusak (mis. penulisan yang terputus di tengah), yang
-         * membuat `create()` gagal SELAMANYA sehingga aplikasi tidak bisa menyimpan apa
-         * pun. Berkas yang sudah terbukti tidak terbaca untuk kunci ini tidak menyimpan
-         * apa pun yang masih bisa diselamatkan, jadi ia dikosongkan lalu pembukaan
-         * diulang — data registrasinya memang hilang, tetapi aplikasi bisa mendaftar
-         * ulang (persis konsekuensi yang dipilih untuk perangkat era fallback polos:
-         * daftar ulang SEKALI).
-         *
-         * Kegagalan kedua berarti keystore-nya yang bermasalah. Di sini SENGAJA tidak
-         * ada fallback ke berkas polos (kunci privat tidak boleh tersimpan tanpa
-         * enkripsi, berapa pun harganya): lempar [KeystoreUnavailableException] dan
-         * biarkan pemanggil menjelaskannya ke pengguna.
+         * Kegagalan membuka storage tidak boleh menghapus data secara otomatis. Exception
+         * dapat berasal dari keystore yang terkunci sementara, provider yang gagal, I/O,
+         * atau file yang benar-benar korup; pada titik ini aplikasi tidak memiliki bukti
+         * yang cukup untuk membedakan semuanya. Data dipertahankan dan pemanggil menerima
+         * [KeystoreUnavailableException]. Reset hanya boleh terjadi melalui alur pengguna
+         * yang eksplisit setelah konsekuensi kehilangan registrasi dijelaskan.
          */
         @Throws(KeystoreUnavailableException::class)
         private fun open(ctx: Context): SharedPreferences {
             try {
                 return openEncrypted(ctx).also { migrateLegacy(ctx, it) }
             } catch (e: Exception) {
-                VelumLog.w(TAG, "prefs terenkripsi gagal dibuka; berkas dikosongkan lalu dicoba ulang", e)
-                deleteEncryptedFile(ctx)
-                return try {
-                    openEncrypted(ctx).also { migrateLegacy(ctx, it) }
-                } catch (kedua: Exception) {
-                    throw KeystoreUnavailableException(kedua)
-                }
+                VelumLog.w(TAG, "prefs terenkripsi gagal dibuka; data dipertahankan", e)
+                throw KeystoreUnavailableException(e)
             }
         }
 
@@ -320,15 +308,6 @@ class Prefs(context: Context) {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-        }
-
-        /** Menghapus berkas terenkripsi yang sudah terbukti tidak bisa dibuka. */
-        private fun deleteEncryptedFile(ctx: Context) {
-            try {
-                File(File(ctx.applicationInfo.dataDir, "shared_prefs"), "$FILE.xml").delete()
-            } catch (e: Exception) {
-                VelumLog.w(TAG, "gagal mengosongkan berkas prefs rusak", e)
-            }
         }
 
         /** Keberadaan berkas era lama, tanpa membuka/dekripsi isinya. */

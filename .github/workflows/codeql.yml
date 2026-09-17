@@ -55,14 +55,14 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # init HARUS sebelum langkah build: ia memasang perekam CodeQL di dalam
       # proses Gradle, dan perekam hanya menangkap kompilasi yang terjadi
       # sesudahnya. Menaruh init setelah build menghasilkan basis data kosong
       # lagi — gejalanya sama persis dengan autobuild yang gagal.
       - name: Inisialisasi CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@faaca9a8f6edddba5725ffe5adefdab6669a2eca # v3
         with:
           languages: java-kotlin
 
@@ -70,20 +70,20 @@ jobs:
       # kode yang dikompilasi oleh job `verifikasi`. Beda versi JDK bisa
       # menghasilkan artefak yang tidak sama dengan yang dirilis.
       - name: Setup JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
           # `tools` sudah tidak tersedia di repository SDK modern; CodeQL hanya
           # memerlukan platform dan build tools untuk kompilasi yang direkam.
           packages: "platform-tools platforms;android-36 build-tools;36.0.0"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
 
       # `--no-build-cache` sengaja dan tidak boleh dihapus: tanpanya tugas
       # dilayani FROM-CACHE dan CodeQL tidak melihat kode apa pun (lihat catatan
@@ -93,6 +93,6 @@ jobs:
         run: ./gradlew --no-daemon --stacktrace assembleDebug --no-build-cache
 
       - name: Analisis CodeQL
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@faaca9a8f6edddba5725ffe5adefdab6669a2eca # v3
         with:
           category: "/language:java-kotlin"

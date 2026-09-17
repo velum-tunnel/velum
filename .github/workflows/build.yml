@@ -6,6 +6,11 @@ on:
     paths-ignore:
       - "**.md"
       - "docs/**"
+  pull_request:
+    branches: ["main"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   workflow_dispatch:
 
 concurrency:
@@ -23,29 +28,31 @@ jobs:
   # sekali dan tugas berikutnya memakai ulang cache konfigurasi & build yang panas.
   #
   # Urutan sengaja: unit test dulu (paling cepat gagal, paling murah), lalu
-  # assembleDebug (pemblokir utama), lalu lint (advisori, tidak boleh menggagalkan
-  # job — karena itu `continue-on-error` per-step, bukan per-job).
+  # assembleDebug (pemblokir utama), lalu lint sebagai quality gate wajib.
   verify:
     name: verifikasi (build, tes, lint)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
           # `tools` sudah tidak tersedia di repository SDK modern.
           packages: "platform-tools platforms;android-36 build-tools;36.0.0"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+
+      - name: Gerbang expiry certificate pin
+        run: python3 .github/scripts/periksa-pin.py
 
       # Dijalankan lebih dulu: paling ringan, dan regresi logika (mis. false
       # negative "Belum lewat Velum") harus ketahuan sebelum waktu habis di APK.
@@ -97,12 +104,11 @@ jobs:
             python3 .github/scripts/anotasikan-log.py "$RUNNER_TEMP/preview.log"
           fi
 
-      # ADVISORI: temuan lint tidak boleh menggagalkan job (lihat AGENTS.md §5),
-      # tetapi tetap dijaga hijau. continue-on-error dipasang di step ini saja.
-      - name: Lint debug (advisori)
+      # Lint adalah quality gate wajib. Temuan lint harus diperbaiki sebelum merge,
+      # bukan disembunyikan sebagai status hijau advisory.
+      - name: Lint debug (wajib)
         id: lint
         if: always() && steps.assemble.conclusion != 'cancelled'
-        continue-on-error: true
         run: ./gradlew --no-daemon --stacktrace lintDebug
 
       - name: Tampilkan temuan lint
@@ -126,7 +132,7 @@ jobs:
             echo "- Pengujian unit: ${{ steps.unit_test.conclusion }}"
             echo "- Build debug: ${{ steps.assemble.conclusion }}"
             echo "- Build preview (R8): ${{ steps.preview.conclusion }}"
-            echo "- Lint (advisori): ${{ steps.lint.conclusion }}"
+            echo "- Lint (wajib): ${{ steps.lint.conclusion }}"
             echo "- Gradle: $(grep -o 'gradle-[0-9.]*-bin' gradle/wrapper/gradle-wrapper.properties || echo '?')"
             echo "- AGP: $(grep -E '^agp' gradle/libs.versions.toml || echo '?')"
             # Pemecahan per ABI menghasilkan beberapa APK; daftarkan semuanya beserta
@@ -149,7 +155,7 @@ jobs:
       # (mis. app-arm64-v8a-debug.apk), jadi path tidak boleh dipatok ke app-debug.apk.
       - name: Unggah APK
         if: success()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
@@ -159,7 +165,7 @@ jobs:
       # rilis, tetapi bertanda tangan kunci debug sehingga tidak butuh keystore.
       - name: Unggah APK preview
         if: success()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: app-preview
           path: app/build/outputs/apk/preview/*.apk
@@ -169,7 +175,7 @@ jobs:
       # tanpa berkas ini, stack trace preview/rilis tidak terbaca.
       - name: Unggah mapping R8
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: mapping-preview
           path: app/build/outputs/mapping/preview/mapping.txt
@@ -177,7 +183,7 @@ jobs:
 
       - name: Unggah laporan pengujian
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: unit-test-report
           path: app/build/reports/tests/testDebugUnitTest
@@ -185,7 +191,7 @@ jobs:
 
       - name: Unggah laporan lint
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: lint-report
           path: app/build/reports/lint-results-debug.html
@@ -201,22 +207,22 @@ jobs:
     needs: [verify]
     if: vars.ENABLE_RELEASE_SIGNING == 'true'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
           # Gunakan paket SDK yang sama dengan job verifikasi.
           packages: "platform-tools platforms;android-36 build-tools;36.0.0"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
 
       - name: Materialisasi keystore dari Secrets
         env:
@@ -283,7 +289,7 @@ jobs:
       # Beberapa APK per ABI + satu universal; unggah semuanya (lihat splits di
       # app/build.gradle.kts). Pengguna GitHub Releases memilih berkas sendiri.
       - name: Unggah APK rilis
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: app-release
           path: app/build/outputs/apk/release/*.apk
