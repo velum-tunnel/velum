@@ -203,6 +203,10 @@ A GitHub-hosted runner is not an acceptable substitute for a real device. Local 
 
 ## Final Status
 
+## CI
+
+The Phase 7 build workflow completed successfully: [run 35377453860](https://github.com/velum-tunnel/velum/actions/runs/35377453860), including unit tests, debug build, preview/R8, lint, release signing/verification, and artifact upload. The documentation workflow also completed successfully: run `35377454007`.
+
 **RUNNER: BLOCKED**
 
 No self-hosted runner is registered or reachable for this repository.
