@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Tanggal:** 2026-09-12
-- **Terkait:** ADR 002 (identitas), AGENTS.md §5 (jebakan 2026-09-12), TODO 71 (utang uji perangkat)
+- **Terkait:** ADR 002 (identitas), batasan artifact CI sandbox (jebakan 2026-09-12), TODO 71 (utang uji perangkat)
 
 ## Konteks
 
@@ -37,7 +37,7 @@ Tiga cacat nyata yang muncul dari penyebaran itu:
    menghidupkan kembali tunnel yang baru diminta mati adalah kebocoran niat, bukan
    kosmetik.
 
-Batasan yang diterima: tidak ada coroutine, tidak ada dependensi baru (AGENTS.md §0), dan
+Batasan yang diterima: tidak ada coroutine, tidak ada dependensi baru (batasan arsitektur proyek), dan
 tidak ada emulator di lingkungan kerja agen maupun di CI, sehingga apa pun yang bergantung
 pada Android framework tidak bisa diuji otomatis.
 

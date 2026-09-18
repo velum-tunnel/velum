@@ -2,11 +2,11 @@
 
 Tanggal audit: 2026-09-14 · Branch: `arena/01a0a016-velum` · Basis: `8c5cb64` (main)
 
-Seluruh perubahan memakai Bahasa Indonesia, mengikuti konvensi repo (AGENTS.md §4),
+Seluruh perubahan memakai Bahasa Indonesia, mengikuti konvensi repo (kebijakan versioning proyek),
 dan **tidak menambah dependensi baru** — APK tetap ramping (tidak ada OkHttp,
 tidak ada library mocking; hanya `BuildConfig` yang diaktifkan, satu kelas kecil).
 
-> **Catatan verifikasi yang jujur.** Sandbox agen tidak memiliki JVM (AGENTS.md §5),
+> **Catatan verifikasi yang jujur.** Sandbox agen tidak memiliki JVM (batasan artifact CI sandbox),
 > sehingga `./gradlew assembleDebug`/`testDebugUnitTest` tidak dapat dijalankan lokal —
 > sesuai aturan repo, build & test berjalan di GitHub Actions (job `verify` di
 > `.github/workflows/build.yml` menjalankan `testDebugUnitTest` → `assembleDebug` →
@@ -49,7 +49,7 @@ Commit: `fad0e46` `security: hapus fallback penyimpanan polos kunci privat`
 | 1 | `network_security_config.xml` baru: `cleartextTrafficPermitted=false` global; pin SPKI SHA-256 untuk `api.cloudflareclient.com` — **enam** pin: CA penerbit khusus Cloudflare yang benar-benar menerbitkan domain itu menurut log Certificate Transparency (diambil 2026-09-14): `WR1`/`WE1` (Google Trust Services) + `YR1`/`YR2`/`YE1`/`YE2` (Let's Encrypt). Bukan pin daun: daun diputar ±90 hari dan akan mem-brick aplikasi | `app/src/main/res/xml/network_security_config.xml` (baru) |
 | | **Verifikasi pin:** nilai `issuer.pubkey_sha256` dari API certspotter dibuktikan dengan menghitung ulang SPKI sertifikat daun nyata dari respons CT yang sama (openssl) — **cocok**, lalu dikonversi hex→Base64. Semua pin dapat diverifikasi ulang publik lewat prosedur di `SECURITY.md` | — |
 | 2 | `android:networkSecurityConfig="@xml/network_security_config"` pada `<application>` | `AndroidManifest.xml` |
-| 3 | **Tidak ada `CertificatePinner` OkHttp** — menambah OkHttp melanggar AGENTS.md §0 dan constraint tugas ("prioritaskan solusi tanpa dependensi baru"); `networkSecurityConfig` platform sudah mencakup `HttpURLConnection` yang dipakai `VelumApi` sejak API 24 (= `minSdk`) | — |
+| 3 | **Tidak ada `CertificatePinner` OkHttp** — menambah OkHttp melanggar batasan arsitektur proyek dan constraint tugas ("prioritaskan solusi tanpa dependensi baru"); `networkSecurityConfig` platform sudah mencakup `HttpURLConnection` yang dipakai `VelumApi` sejak API 24 (= `minSdk`) | — |
 | 4 | `SECURITY.md`: prosedur rotasi pin selangkah demi selangkah (ambil log CT → verifikasi SPKI → hex→Base64 → perbarui XML → majukan expiration → uji di perangkat) | `SECURITY.md` (baru) |
 | 5 | **Fallback anti-brick:** `<pin-set expiration="2027-03-31">` — lewat tanggal itu pin diabaikan platform (fail-open), jadi aplikasi lama tidak mati permanen bila rotasi luput; ruang lingkup pin hanya host API berefisiensi kredensial (host trace & DoH sengaja tidak dipin). TODO 123 melacak rotasi | `network_security_config.xml`, `TODO.md` |
 
@@ -120,16 +120,16 @@ Commit: `172eef1` `feat: kandidat anycast via DoH + endpoint pilihan pengguna`
   (handshake tiruan, 7 kasus) — sesuai permintaan "RTT + handshake mock".
 - **MockK/Mockito sengaja tidak ditambah**: logika yang rawan salah diekstrak menjadi
   fungsi/objek murni (`VelumVerifiedChoice`, `VelumDoh`, `VelumFormat`), sehingga
-  "mock" cukup berupa lambda — tanpa dependensi berat (constraint tugas + AGENTS.md §0).
+  "mock" cukup berupa lambda — tanpa dependensi berat (constraint tugas + batasan arsitektur proyek).
 - **CI**: unit test sudah tergabung di `.github/workflows/build.yml` (step pertama job
   `verify` menjalankan `testDebugUnitTest` pada setiap push; `test.yml` terpisah tidak
   dibuat karena akan menduplikasi toolchain yang sama persis).
 
-Commit: `b5c61ac` `chore: PRIVACY…` + `b6d54cd` `docs: sinkronisasi AGENTS.md`
+Commit: `b5c61ac` `chore: PRIVACY…` + `b6d54cd` `docs: sinkronisasi kebijakan proyek`
 
 ## 📋 Bukti Verifikasi
 
-Sandbox: **tanpa JVM** (per AGENTS.md §5 — build hanya di CI). Tiap commit di-push ke
+Sandbox: **tanpa JVM** (per batasan artifact CI sandbox — build hanya di CI). Tiap commit di-push ke
 `arena/01a0a016-velum` dan diverifikasi GitHub Actions (`testDebugUnitTest` →
 `assembleDebug` → `assemblePreview` R8 → `lintDebug`):
 
@@ -164,7 +164,7 @@ Sandbox: **tanpa JVM** (per AGENTS.md §5 — build hanya di CI). Tiap commit di
 2. **Header klien bisa ditolak lagi** bila upstream menaikkan versi minimum: `// TODO:
    refresh header version periodically` di `VelumUpstream.kt`; `isClientRejected`
    memunculkannya sebagai "perlu pembaruan", bukan "gagal jaringan".
-3. **Verifikasi perangkat belum ada**: repo tidak punya emulator (AGENTS.md §12). D2
+3. **Verifikasi perangkat belum ada**: repo tidak punya emulator (protokol pengujian perangkat proyek). D2
    (dialog keystore), H7 (endpoint manual), H8 (header+pin) menunggu maintainer —
    ledger `docs/verifikasi-perangkat.md`. Klaim runtime di luar CI adalah
    "kompilasi + unit test + nalar", persis format yang diwajibkan repo.

@@ -1,5 +1,5 @@
 # Pembaruan versi otomatis. Sumber kebenaran versi tetap gradle/libs.versions.toml
-# (lihat AGENTS.md §4) — Dependabot hanya membuka PR, manusia yang memutuskan.
+# (lihat kebijakan versioning proyek) — Dependabot hanya membuka PR, manusia yang memutuskan.
 version: 2
 updates:
   - package-ecosystem: gradle

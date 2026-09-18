@@ -1,4 +1,4 @@
-# Satu-satunya sumber kebenaran versi dependensi & plugin (lihat AGENTS.md §4).
+# Satu-satunya sumber kebenaran versi dependensi & plugin (lihat kebijakan versioning proyek).
 [versions]
 agp = "9.4.0"
 compileSdk = "36"

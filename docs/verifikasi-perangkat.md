@@ -5,7 +5,7 @@ Catatan **hasil** uji perangkat. Checklist-nya (langkah + hasil yang diharapkan)
 laporan maintainer tidak hilang di percakapan dan status di `TODO.md` bisa dinaikkan
 berdasarkan bukti yang bisa ditunjuk.
 
-Diatur oleh AGENTS.md §12.
+Diatur oleh protokol pengujian perangkat proyek.
 
 ## Batasan yang membentuk ledger ini
 

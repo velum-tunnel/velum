@@ -336,10 +336,10 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
   `continue-on-error` di level step. Urutan sengaja tes → build → lint agar kegagalan
   termurah muncul lebih dulu, dan semua tahap tetap berjalan (`if: always()`) supaya satu
   run melaporkan seluruh masalah sekaligus.
-- AGENTS.md §1 kini **portabel**: nama branch sesi dan SHA pangkal tidak lagi ditulis di
+- kebijakan proyek §1 kini **portabel**: nama branch sesi dan SHA pangkal tidak lagi ditulis di
   dalam aturan, melainkan ditemukan saat runtime lewat ritual pra-tugas 5 langkah; kronologi
   insiden dipindah ke §5. Ditambah larangan menyentuh branch sesi lama & `dependabot/*`.
-- AGENTS.md §5 disinkronkan dengan keadaan repo setelah PR #3 ter-merge: 18 berkas Kotlin
+- batasan artifact CI sandbox disinkronkan dengan keadaan repo setelah PR #3 ter-merge: 18 berkas Kotlin
   (termasuk `VelumController`, `VelumUpstream`, `VelumError`, `VelumRegistration`,
   `VelumMigration`, `VelumDiagnostics`, `VelumTileService`, `AppExclusionActivity`),
   CI 4 job (`assembleDebug`, `unitTest`, `lint` advisori, `release`), skrip anotasi,
@@ -428,7 +428,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
   kini tertahan sebelum merge, bukan hanya kegagalan kompilasi.
 
 ### Changed
-- AGENTS.md §3/§5 disinkronkan dengan stack, CI, dan temuan run pertama.
+- kebijakan proyek §3/§5 disinkronkan dengan stack, CI, dan temuan run pertama.
 - Pembantu murni (`formatBytes`, `formatDuration`, parse `cdn-cgi/trace`, `hostPart`,
   `isIpLiteral`) dipindahkan dari `MainActivity`/`VelumApi`/`EndpointProbe` ke `VelumFormat`
   agar dapat diuji unit tanpa Android framework; `VelumApi.fetchTrace()` kini mengembalikan

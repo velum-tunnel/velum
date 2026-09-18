@@ -156,7 +156,7 @@ Lewat browser: halaman **Releases** → *Draft a new release* → isi tag → un
 keempat APK dari artifact `app-release`.
 
 Versi (`versionName`/`versionCode`) hanya di-bump atas perintah eksplisit
-(lihat AGENTS.md §4); sesuaikan tag dengan versi di `app/build.gradle.kts`.
+(lihat kebijakan versioning proyek); sesuaikan tag dengan versi di `app/build.gradle.kts`.
 
 ## Bila terjadi kesalahan
 

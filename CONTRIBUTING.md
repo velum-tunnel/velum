@@ -1,6 +1,5 @@
 # Kontribusi
 
-Semua aturan operasional (branch, commit, CI, changelog, ADR) ada di [AGENTS.md](AGENTS.md). Baca dan patuhi sebelum mengubah apa pun.
-
-§6 di dokumen itu memuat protokol kerja (presisi & efisiensi waktu) yang mengubah cara
-agen mengeksekusi pekerjaan — baca bagian itu sebelum meminta perubahan kode.
+Gunakan branch kerja singkat, buat perubahan atomik, dan sertakan pengujian atau bukti
+verifikasi yang relevan. Perubahan CI, signing, certificate pinning, dan dependensi harus
+ditinjau secara khusus karena memengaruhi integritas rilis.

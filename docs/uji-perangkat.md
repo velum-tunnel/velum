@@ -1,7 +1,7 @@
 # Uji Perangkat Velum — tanpa adb
 
 Checklist pengujian di perangkat Android nyata. **Dibutuhkan** karena repo ini tidak punya
-emulator — tidak di lingkungan agen, tidak di CI (AGENTS.md §11.2, §12).
+emulator — tidak di lingkungan agen, tidak di CI (keterbatasan lingkungan proyek).
 
 Disusun untuk keadaan maintainer yang sebenarnya: **Android 14, tanpa adb, tanpa komputer**
 (dinyatakan 2026-09-13). Karena itu **setiap uji di sini bisa dilakukan dari layar
@@ -32,7 +32,7 @@ perangkat saja**. Tidak ada perintah `adb`, tidak ada logcat, tidak ada `dumpsys
 - **Cara melapor paling berguna:** salin **seluruh** isi diagnostik (tombol salin di panel
   itu) dan tempel apa adanya, ditambah satu kalimat apa yang Anda lihat di layar. Jangan
   dirangkum menjadi "berhasil" atau "lancar" — ringkasan tidak bisa dipakai memutuskan apa
-  pun (AGENTS.md §12 butir 3).
+  pun (protokol verifikasi proyek).
 
 ---
 
@@ -201,7 +201,7 @@ logcat sama sekali** — angkanya ada di baris `Boot`.
 
 Berikut ini dulu tertulis sebagai tugas Anda. Semuanya **ditarik kembali**: tanpa adb tidak
 ada cara menjalankannya, dan memintanya berarti memindahkan beban yang seharusnya dipikul
-agen (AGENTS.md §12, "Kewajiban mengubah V3 menjadi V1").
+agen (protokol verifikasi proyek).
 
 | Dulu diminta | Kenapa tidak lagi | Penggantinya |
 |---|---|---|

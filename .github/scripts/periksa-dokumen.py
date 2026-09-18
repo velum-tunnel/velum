@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Gerbang konsistensi dokumen — menjalankan mekanis aturan yang tadinya hanya prosa.
 
-Alasan berkas ini ada (2026-09-13): aturan di AGENTS.md bergantung pada agen **ingat**
+Alasan berkas ini ada (2026-09-13): aturan di kebijakan proyek bergantung pada agen **ingat**
 menjalankannya, dan buktinya tidak andal — pada hari aturan itu ditulis, agen yang
 menulisnya melanggar Gerbang 0 (§3) dan mengarang angka versi di dokumen (TODO 95, 96).
 CI adalah satu-satunya penegakan yang selamat dari daur ulang sandbox, jadi pemeriksaan
@@ -25,7 +25,7 @@ Dijalankan lokal maupun di CI:
 
 Keluar 0 bila bersih, 1 bila ada pelanggaran. Kegagalan juga dipancarkan sebagai anotasi
 `::error file=...,line=...` supaya terbaca dari halaman run tanpa mengunduh log — log CI
-tidak bisa diunduh dari sandbox agen (AGENTS.md §5), jadi anotasi satu-satunya jalan.
+tidak bisa diunduh dari sandbox agen (batasan artifact CI sandbox), jadi anotasi satu-satunya jalan.
 """
 import glob
 import os

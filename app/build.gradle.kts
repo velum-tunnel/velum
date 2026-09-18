@@ -93,7 +93,7 @@ android {
     }
 
     // Laporan teks dibutuhkan CI: laporan HTML tidak bisa dibaca dari log,
-    // dan artifact tidak bisa diunduh dari sandbox agen (lihat AGENTS.md §5).
+    // dan artifact tidak bisa diunduh dari sandbox agen (lihat batasan artifact CI sandbox).
     // Hanya bahasa Indonesia; resource bahasa lain dari library dibuang agar APK
     // kecil. Menggantikan defaultConfig.resourceConfigurations yang dihapus AGP 9.
     androidResources {

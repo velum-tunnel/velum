@@ -97,7 +97,7 @@ jobs:
             python3 .github/scripts/anotasikan-log.py "$RUNNER_TEMP/preview.log"
           fi
 
-      # ADVISORI: temuan lint tidak boleh menggagalkan job (lihat AGENTS.md §5),
+      # ADVISORI: temuan lint tidak boleh menggagalkan job (lihat batasan artifact CI sandbox),
       # tetapi tetap dijaga hijau. continue-on-error dipasang di step ini saja.
       - name: Lint debug (advisori)
         id: lint
@@ -131,7 +131,7 @@ jobs:
             echo "- AGP: $(grep -E '^agp' gradle/libs.versions.toml || echo '?')"
             # Pemecahan per ABI menghasilkan beberapa APK; daftarkan semuanya beserta
             # ukurannya supaya dampak pemecahan terlihat langsung tanpa mengunduh artifact
-            # (artifact tidak bisa diunduh dari sandbox agen, lihat AGENTS.md §5).
+            # (artifact tidak bisa diunduh dari sandbox agen, lihat batasan artifact CI sandbox).
             # Debug & preview disandingkan agar dampak R8 terbaca sebagai angka.
             echo ""
             echo "| APK | Varian | Ukuran |"

@@ -54,5 +54,5 @@ jobs:
 
       # Bila gerbang gagal, keluaran skrip sudah memuat anotasi `::error file=…,line=…`
       # sehingga penyebabnya terbaca langsung di halaman run — tanpa mengunduh log.
-      # Log CI tidak bisa diunduh dari sandbox agen (AGENTS.md §5), dan maintainer pun
+      # Log CI tidak bisa diunduh dari sandbox agen (batasan artifact CI sandbox), dan maintainer pun
       # tidak punya adb/alat lokal, jadi anotasi adalah satu-satunya jalur yang andal.

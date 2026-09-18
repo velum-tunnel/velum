@@ -58,10 +58,10 @@ rotasi luput. Harganya: pin wajib disegarkan pada setiap rilis.
 
 Kunci privat WireGuard, token, dan identitas perangkat disimpan **hanya** di
 `EncryptedSharedPreferences` (AES256-GCM, kunci dari Android Keystore) — tidak ada
-fallback polos. Bila keystore perangkat gagal dibuka, aplikasi melempar
-`KeystoreUnavailableException`, menampilkan "Penyimpanan aman tidak tersedia.
-Daftar ulang diperlukan.", dan berhenti; berkas prefs yang terbukti rusak
-dikosongkan lalu pembukaan dicoba ulang sekali. Lihat `Prefs.open`.
+fallback polos. Bila keystore atau storage perangkat gagal dibuka, aplikasi melempar
+`KeystoreUnavailableException`, mempertahankan berkas prefs, menampilkan "Penyimpanan aman
+tidak tersedia", dan berhenti. Penghapusan atau pendaftaran ulang harus menjadi keputusan
+eksplisit pengguna. Lihat `Prefs.open`.
 
 ## Pelaporan kerentanan
 
