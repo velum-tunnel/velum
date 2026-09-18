@@ -127,12 +127,12 @@ Phase 3 report changes are documentation-only, so the repository build workflowâ
 - [Build workflow run 35334161270](https://github.com/velum-tunnel/velum/actions/runs/35334161270): SUCCESS, including unit tests, debug build, preview/R8, lint, release signing/verification, and artifact upload.
 - [Documentation workflow run 35334741900](https://github.com/velum-tunnel/velum/actions/runs/35334741900): SUCCESS.
 
-A manual build workflow dispatch for the Phase 3 branch will be performed after push so the branch itself has a current CI run.
+A manual build workflow dispatch for the Phase 3 branch completed successfully: [build run 35337592242](https://github.com/velum-tunnel/velum/actions/runs/35337592242). The documentation workflow for the branch also completed successfully: run `35337574912`.
 
 ## 12. Git
 
 - **Branch:** `audit/phase3-runtime`.
-- **Phase 3 commit:** recorded after report creation.
+- **Phase 3 commit:** `b6d4bb4` (`docs: record phase 3 runtime verification limits`).
 - **Remote:** `origin/audit/phase3-runtime`.
 - **Main:** untouched; no merge or direct push to `main`.
 
