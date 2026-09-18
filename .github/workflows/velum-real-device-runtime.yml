@@ -1,0 +1,105 @@
+name: Velum Real Device Runtime
+
+# Deliberately manual-only: a self-hosted Android runner is trusted infrastructure,
+# not a safe target for arbitrary pull-request or fork code.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: velum-real-device-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  runtime:
+    name: Real Android device smoke test
+    runs-on:
+      - self-hosted
+      - android
+      - velum-runtime
+    timeout-minutes: 30
+    env:
+      EVIDENCE_DIR: artifacts/phase7
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Android tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${ANDROID_HOME:-}" && -d "$ANDROID_HOME/platform-tools" ]]; then
+            echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+            echo "$ANDROID_HOME/build-tools/36.0.0" >> "$GITHUB_PATH"
+          fi
+          command -v adb
+          adb version
+
+      - name: Preflight exactly one healthy device
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR/device-info"
+          scripts/phase5/runtime.sh preflight "$EVIDENCE_DIR/device-info"
+          serial="$(adb devices | awk 'NR > 1 && $2 == "device" { print $1 }')"
+          [[ -n "$serial" ]]
+          echo "ANDROID_SERIAL=$serial" >> "$GITHUB_ENV"
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon assembleDebug
+          apk="$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*universal-debug.apk' -print -quit)"
+          [[ -n "$apk" && -f "$apk" ]]
+          echo "VELUM_APK=$apk" >> "$GITHUB_ENV"
+          package="$(aapt dump badging "$apk" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+          activity="$(aapt dump badging "$apk" | sed -n "s/^launchable-activity: name='\([^']*\)'.*/\1/p")"
+          [[ -n "$package" && -n "$activity" ]]
+          echo "VELUM_PACKAGE=$package" >> "$GITHUB_ENV"
+          echo "VELUM_ACTIVITY=$activity" >> "$GITHUB_ENV"
+
+      - name: Install actual APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR/install"
+          scripts/phase5/runtime.sh install_apk "$VELUM_APK" "$VELUM_PACKAGE" | tee "$EVIDENCE_DIR/install/install.txt"
+          adb shell pm list packages | grep -F "$VELUM_PACKAGE" > "$EVIDENCE_DIR/install/package-list.txt"
+
+      - name: Run launch smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/phase5/runtime.sh run_runtime_smoke_test "$VELUM_PACKAGE" "$VELUM_ACTIVITY" "$EVIDENCE_DIR/launch"
+
+      - name: Capture runtime evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -n "${VELUM_PACKAGE:-}" ]]; then
+            scripts/phase5/runtime.sh collect_artifacts "$EVIDENCE_DIR/runtime" "$VELUM_PACKAGE"
+          fi
+          adb devices -l > "$EVIDENCE_DIR/adb-state-final.txt" 2>&1 || true
+
+      - name: Cleanup device state
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -n "${VELUM_PACKAGE:-}" ]]; then
+            scripts/phase5/runtime.sh cleanup "$VELUM_PACKAGE"
+          fi
+
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: velum-phase7-runtime-${{ github.run_id }}
+          path: artifacts/phase7/
+          if-no-files-found: warn
+          retention-days: 14
