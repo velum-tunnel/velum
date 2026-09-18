@@ -50,4 +50,15 @@ class VelumMigrationTest {
     fun nilaiNull_diabaikan() {
         assertTrue(VelumMigration.plan(linkedMapOf("kosong" to null)).isEmpty())
     }
+
+    @Test
+    fun setDenganTipeCampuran_diabaikanTanpaMerusakMigrasi() {
+        val hasil = VelumMigration.plan(
+            linkedMapOf(
+                "private_key" to "kunci",
+                "campuran" to setOf<Any>("com.a", 42)
+            )
+        )
+        assertEquals(mapOf("private_key" to "kunci"), hasil)
+    }
 }

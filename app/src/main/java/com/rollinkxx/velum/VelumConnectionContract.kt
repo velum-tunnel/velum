@@ -20,8 +20,9 @@ object VelumConnectionContract {
         cancelled: () -> Boolean = { false }
     ): Boolean {
         if (cancelled()) return false
+        val minimumHandshakeEpochMs = System.currentTimeMillis()
         VelumTunnel.up(context, prefs)
-        val valid = verify(context, maxWaitMs, cancelled)
+        val valid = verify(context, maxWaitMs, cancelled, minimumHandshakeEpochMs)
         if (!valid && !cancelled()) runCatching { VelumTunnel.down(context) }
         return valid
     }
@@ -34,8 +35,9 @@ object VelumConnectionContract {
         cancelled: () -> Boolean = { false }
     ): Boolean {
         if (cancelled()) return false
+        val minimumHandshakeEpochMs = System.currentTimeMillis()
         VelumTunnel.restart(context, prefs, shouldContinue = { !cancelled() })
-        val valid = verify(context, maxWaitMs, cancelled)
+        val valid = verify(context, maxWaitMs, cancelled, minimumHandshakeEpochMs)
         if (!valid && !cancelled()) runCatching { VelumTunnel.down(context) }
         return valid
     }
@@ -44,9 +46,10 @@ object VelumConnectionContract {
     fun verify(
         context: Context,
         maxWaitMs: Long,
-        cancelled: () -> Boolean = { false }
+        cancelled: () -> Boolean = { false },
+        minimumHandshakeEpochMs: Long = 0L
     ): Boolean {
-        val handshake = awaitHandshake(context, maxWaitMs, cancelled)
+        val handshake = awaitHandshake(context, maxWaitMs, cancelled, minimumHandshakeEpochMs)
         return accepted(
             tunnelUp = VelumTunnel.state == Tunnel.State.UP,
             handshakeReady = handshake,
@@ -58,13 +61,18 @@ object VelumConnectionContract {
     fun awaitHandshake(
         context: Context,
         maxWaitMs: Long,
-        cancelled: () -> Boolean = { false }
+        cancelled: () -> Boolean = { false },
+        minimumHandshakeEpochMs: Long = 0L
     ): Boolean {
         val deadline = SystemClock.elapsedRealtime() + maxWaitMs
         while (SystemClock.elapsedRealtime() < deadline) {
             if (cancelled()) return false
             if (VelumTunnel.state != Tunnel.State.UP) return false
-            if ((VelumTunnel.traffic(context)?.latestHandshakeMs ?: 0L) > 0L) return true
+            if (handshakeIsFresh(
+                    VelumTunnel.traffic(context)?.latestHandshakeMs ?: 0L,
+                    minimumHandshakeEpochMs
+                )
+            ) return true
             try {
                 Thread.sleep(HANDSHAKE_POLL_MS)
             } catch (_: InterruptedException) {
@@ -73,4 +81,8 @@ object VelumConnectionContract {
         }
         return false
     }
+
+    /** WireGuard statistics use Unix epoch milliseconds; a prior session must not qualify. */
+    fun handshakeIsFresh(latestHandshakeEpochMs: Long, minimumHandshakeEpochMs: Long): Boolean =
+        latestHandshakeEpochMs > 0L && latestHandshakeEpochMs > minimumHandshakeEpochMs
 }

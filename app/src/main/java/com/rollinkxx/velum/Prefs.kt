@@ -183,8 +183,9 @@ class Prefs(context: Context) {
      * proses yang mati — seluruh bidang masuk, atau tidak sama sekali.
      */
     @SuppressLint("ApplySharedPref")
+    @Throws(PersistenceException::class)
     fun saveRegistration(r: VelumRegistration.Result, privateKeyBase64: String) {
-        sp.edit()
+        val saved = sp.edit()
             .putString(K_PRIV, privateKeyBase64)
             .putString(K_ID, r.id)
             .putString(K_TOKEN, r.token)
@@ -196,6 +197,7 @@ class Prefs(context: Context) {
             .putString(K_ENDPOINT, r.endpoint)
             .putBoolean(K_WARP, true) // body registrasi memang meminta warp_enabled
             .commit()
+        if (!saved) throw PersistenceException("registrasi tidak dapat disimpan ke penyimpanan aman")
     }
 
     /**
@@ -222,6 +224,7 @@ class Prefs(context: Context) {
      * padahal pengguna pernah dengan sengaja mematikannya.
      */
     @SuppressLint("ApplySharedPref")
+    @Throws(PersistenceException::class)
     fun clear() {
         val keepUp = wasUp
         val keepExcluded = excludedApps
@@ -232,7 +235,7 @@ class Prefs(context: Context) {
         if (keepExcluded.isNotEmpty()) ed.putStringSet(K_EXCLUDED, keepExcluded)
         if (keepBoot != null) ed.putString(K_BOOT, keepBoot)
         if (keepManual != null) ed.putString(K_MANUAL_EP, keepManual)
-        ed.commit()
+        if (!ed.commit()) throw PersistenceException("data registrasi tidak dapat dibersihkan")
     }
 
     companion object {
@@ -280,14 +283,11 @@ class Prefs(context: Context) {
         /**
          * Membuka penyimpanan terenkripsi, hanya itu.
          *
-         * Kegagalan pertama dicoba pulihkan SEKALI: penyebab tersering adalah berkas
-         * prefs terenkripsi yang rusak (mis. penulisan yang terputus di tengah), yang
-         * membuat `create()` gagal SELAMANYA sehingga aplikasi tidak bisa menyimpan apa
-         * pun. Berkas yang sudah terbukti tidak terbaca untuk kunci ini tidak menyimpan
-         * apa pun yang masih bisa diselamatkan, jadi ia dikosongkan lalu pembukaan
-         * diulang — data registrasinya memang hilang, tetapi aplikasi bisa mendaftar
-         * ulang (persis konsekuensi yang dipilih untuk perangkat era fallback polos:
-         * daftar ulang SEKALI).
+         * Kegagalan membuka tidak memicu penghapusan otomatis. Exception dapat berasal dari
+         * Android Keystore atau filesystem yang sementara bermasalah, dan menghapus berkas
+         * pada titik ini dapat menghilangkan kredensial valid. Pemanggil menerima
+         * [KeystoreUnavailableException] dan dapat meminta pemulihan perangkat secara aman;
+         * penghapusan atau pendaftaran ulang harus menjadi keputusan eksplisit pengguna.
          *
          * Kegagalan kedua berarti keystore-nya yang bermasalah. Di sini SENGAJA tidak
          * ada fallback ke berkas polos (kunci privat tidak boleh tersimpan tanpa
@@ -299,13 +299,11 @@ class Prefs(context: Context) {
             try {
                 return openEncrypted(ctx).also { migrateLegacy(ctx, it) }
             } catch (e: Exception) {
-                VelumLog.w(TAG, "prefs terenkripsi gagal dibuka; berkas dikosongkan lalu dicoba ulang", e)
-                deleteEncryptedFile(ctx)
-                return try {
-                    openEncrypted(ctx).also { migrateLegacy(ctx, it) }
-                } catch (kedua: Exception) {
-                    throw KeystoreUnavailableException(kedua)
-                }
+                // Jangan menghapus file secara otomatis: exception dapat berasal dari
+                // Keystore/I/O sementara, bukan korupsi. Menghapus di sini menyebabkan
+                // kehilangan kredensial valid dan registrasi server menjadi orphan.
+                VelumLog.w(TAG, "prefs terenkripsi tidak dapat dibuka; data dipertahankan", e)
+                throw KeystoreUnavailableException(e)
             }
         }
 
@@ -320,15 +318,6 @@ class Prefs(context: Context) {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-        }
-
-        /** Menghapus berkas terenkripsi yang sudah terbukti tidak bisa dibuka. */
-        private fun deleteEncryptedFile(ctx: Context) {
-            try {
-                File(File(ctx.applicationInfo.dataDir, "shared_prefs"), "$FILE.xml").delete()
-            } catch (e: Exception) {
-                VelumLog.w(TAG, "gagal mengosongkan berkas prefs rusak", e)
-            }
         }
 
         /** Keberadaan berkas era lama, tanpa membuka/dekripsi isinya. */

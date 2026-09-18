@@ -62,6 +62,24 @@ class VelumRegistrationTest {
         )
     }
 
+    @Test(expected = VelumRegistration.BadResponse::class)
+    fun portBukanAngka_ditolak() {
+        VelumRegistration.parse(jsonLengkap(host = "example.com:abc"))
+    }
+
+    @Test(expected = VelumRegistration.BadResponse::class)
+    fun portDiLuarRentang_ditolak() {
+        VelumRegistration.parse(jsonLengkap(host = "example.com:65536"))
+    }
+
+    @Test
+    fun endpointIpv6Valid_diterima() {
+        assertEquals(
+            "[2001:db8::1]:2408",
+            VelumRegistration.parse(jsonLengkap(host = "[2001:db8::1]:2408")).endpoint
+        )
+    }
+
     @Test
     fun tanpaObjekEndpoint_memakaiCadangan() {
         val json = """{"id":"a","token":"b",

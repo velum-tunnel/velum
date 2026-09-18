@@ -104,6 +104,17 @@ class VelumConnectionContractTest {
     }
 
     @Test
+    fun handshakeLamaTidakDiterimaSebagaiBuktiSesiBaru() {
+        assertFalse(VelumConnectionContract.handshakeIsFresh(1_700L, 1_800L))
+        assertFalse(VelumConnectionContract.handshakeIsFresh(0L, 0L))
+    }
+
+    @Test
+    fun handshakeSetelahAwalOperasiDiterima() {
+        assertTrue(VelumConnectionContract.handshakeIsFresh(1_801L, 1_800L))
+    }
+
+    @Test
     fun claimRecoveryTetapEksklusifSetelahReleaseBerulang() {
         val claim = VelumRecoveryClaim()
         assertTrue(claim.tryClaim())

@@ -49,7 +49,9 @@ object VelumRegistration {
             addressV4 = addresses.wajib("v4"),
             addressV6 = addresses.optString("v6", "").takeIf { it.isNotBlank() },
             peerPublicKey = peer.wajib("public_key"),
-            endpoint = normalizeEndpoint(peer.optJSONObject("endpoint")?.optString("host", ""))
+            endpoint = validateEndpoint(
+                normalizeEndpoint(peer.optJSONObject("endpoint")?.optString("host", ""))
+            )
         )
     }
 
@@ -76,6 +78,38 @@ object VelumRegistration {
             trimmed
         }
         return "$hostPart:$WG_PORT"
+    }
+
+    /** Menolak endpoint malformed sebelum disimpan sebagai profil terdaftar. */
+    @Throws(BadResponse::class)
+    fun validateEndpoint(endpoint: String): String {
+        val trimmed = endpoint.trim()
+        val host: String
+        val portText: String
+        if (trimmed.startsWith("[")) {
+            val closing = trimmed.indexOf(']')
+            if (closing <= 1 || closing + 1 >= trimmed.length || trimmed[closing + 1] != ':') {
+                throw BadResponse("endpoint IPv6 tidak valid")
+            }
+            host = trimmed.substring(1, closing)
+            portText = trimmed.substring(closing + 2)
+            if (!host.matches(Regex("[0-9A-Fa-f:.]+")) || !host.contains(':')) {
+                throw BadResponse("host IPv6 tidak valid")
+            }
+        } else {
+            val separator = trimmed.lastIndexOf(':')
+            if (separator <= 0 || separator == trimmed.lastIndex) {
+                throw BadResponse("endpoint harus memiliki host dan port")
+            }
+            host = trimmed.substring(0, separator)
+            portText = trimmed.substring(separator + 1)
+            if (host.contains(':') || !host.matches(Regex("[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?"))) {
+                throw BadResponse("host endpoint tidak valid")
+            }
+        }
+        val port = portText.toIntOrNull() ?: throw BadResponse("port endpoint bukan angka")
+        if (port !in 1..65535) throw BadResponse("port endpoint di luar rentang")
+        return trimmed
     }
 
     private fun JSONObject.wajib(key: String): String {

@@ -91,6 +91,7 @@
     <string name="err_keystore_title">Penyimpanan aman tidak tersedia</string>
     <string name="err_keystore_body">Penyimpanan aman tidak tersedia. Daftar ulang diperlukan.\n\nAndroid Keystore perangkat ini gagal dibuka, sehingga kunci privat tidak dapat disimpan terenkripsi — dan Velum tidak akan menyimpannya tanpa enkripsi. Nyalakan ulang perangkat, buka Velum kembali, lalu daftarkan ulang.</string>
     <string name="err_keystore">Penyimpanan aman tidak tersedia. Nyalakan ulang perangkat lalu daftar ulang.</string>
+    <string name="err_storage">Penyimpanan aman gagal menulis data. Periksa ruang penyimpanan lalu coba lagi.</string>
     <string name="btn_close_app">Tutup aplikasi</string>
     <string name="reset_done">Registrasi dihapus. Tekan Sambungkan untuk mendaftar ulang.</string>
 </resources>

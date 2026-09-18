@@ -27,6 +27,9 @@ object VelumError {
          */
         KEYSTORE,
 
+        /** Penyimpanan aman gagal menulis atau membersihkan data secara durabel. */
+        STORAGE,
+
         /**
          * Sistem menolak/menutup layanan VPN milik aplikasi (bukan salah jaringan).
          *
@@ -61,6 +64,7 @@ object VelumError {
         // melaporkannya sebagai "Kesalahan jaringan" menyuruh pengguna mengganti Wi-Fi
         // untuk masalah yang tidak ada hubungannya dengan jaringan.
         is KeystoreUnavailableException -> Kind.KEYSTORE
+        is PersistenceException -> Kind.STORAGE
         is UnknownHostException, is SocketTimeoutException, is ConnectException -> Kind.NETWORK
         // Penanda layanan diperiksa SEBELUM memutuskan "ini masalah jaringan".
         // Penolakan layanan latar depan bisa datang terbungkus IOException (mis. dari

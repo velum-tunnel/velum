@@ -688,6 +688,7 @@ class VelumController(context: Context, private val ui: Ui) {
             )
             VelumError.Kind.SERVICE_BLOCKED -> app.getString(R.string.err_connect_closed)
             VelumError.Kind.KEYSTORE -> app.getString(R.string.err_keystore)
+            VelumError.Kind.STORAGE -> app.getString(R.string.err_storage)
             VelumError.Kind.UNKNOWN -> app.getString(resId, detail)
         }
     }

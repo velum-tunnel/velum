@@ -61,6 +61,14 @@ class VelumErrorTest {
     }
 
     @Test
+    fun persistenceFailure_bukanNetwork() {
+        assertEquals(
+            VelumError.Kind.STORAGE,
+            VelumError.kindOf(PersistenceException("disk penuh"))
+        )
+    }
+
+    @Test
     fun penolakanLayananLatarDepan_dikenali() {
         // Bentuk pesan yang mungkin datang dari framework/library pada Android 16+.
         val contoh = listOf(
