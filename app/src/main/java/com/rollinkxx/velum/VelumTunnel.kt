@@ -65,8 +65,16 @@ object VelumTunnel : Tunnel {
         private set
 
     /** Callback UI; dipanggil dari thread backend, penerima harus pindah ke main thread sendiri. */
-    @Volatile
-    var listener: ((Tunnel.State) -> Unit)? = null
+    private val listenerSlot = VelumListenerSlot<(Tunnel.State) -> Unit>()
+    var listener: ((Tunnel.State) -> Unit)?
+        get() = listenerSlot.current
+        set(value) {
+            listenerSlot.current = value
+        }
+
+    /** Clear only the callback still owned by this controller. */
+    fun clearListenerIfCurrent(owner: (Tunnel.State) -> Unit): Boolean =
+        listenerSlot.clearIfCurrent(owner)
 
     /**
      * Generasi niat pengguna, milik **proses** — bukan milik satu layar atau satu pelaku.

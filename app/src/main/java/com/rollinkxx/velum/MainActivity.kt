@@ -232,10 +232,14 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
      * auto-granted. Menghindari permintaan berulang setiap kali layar dibuat.
      */
     private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < 33) return
         val granted = checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (!granted) notifLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        val prefs = Prefs.of(this)
+        if (!VelumNotificationPermission.shouldRequest(Build.VERSION.SDK_INT >= 33, granted, prefs.notificationPermissionRequested)) {
+            return
+        }
+        prefs.notificationPermissionRequested = true
+        notifLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
     }
 
     /** Membuka layar pemilihan aplikasi yang dikecualikan dari tunnel. */

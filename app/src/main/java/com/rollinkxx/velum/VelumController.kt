@@ -111,8 +111,13 @@ class VelumController(context: Context, private val ui: Ui) {
     @Volatile
     private var dead = false
 
+    /** Identity is required so an older Activity cannot clear a newer Activity's listener. */
+    private val tunnelListener: (Tunnel.State) -> Unit = { newState ->
+        main.post { applyState(newState) }
+    }
+
     init {
-        VelumTunnel.listener = { newState -> main.post { applyState(newState) } }
+        VelumTunnel.listener = tunnelListener
     }
 
     /**
@@ -125,7 +130,7 @@ class VelumController(context: Context, private val ui: Ui) {
      */
     fun destroy() {
         dead = true
-        VelumTunnel.listener = null
+        VelumTunnel.clearListenerIfCurrent(tunnelListener)
         cancelPendingTest()
         worker.shutdown()
         testWorker.shutdown()

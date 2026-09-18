@@ -118,6 +118,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(K_WAS_UP, false)
         set(v) = sp.edit().putBoolean(K_WAS_UP, v).apply()
 
+    /** True after the Android 13+ notification permission prompt was shown once. */
+    var notificationPermissionRequested: Boolean
+        get() = sp.getBoolean(K_NOTIFICATION_REQUESTED, false)
+        set(v) = sp.edit().putBoolean(K_NOTIFICATION_REQUESTED, v).apply()
+
     /**
      * Menetapkan memo lifecycle secara durabel. Nilai ini menentukan apakah boot/recovery
      * boleh menghidupkan VPN setelah proses mati, sehingga `apply()` tidak cukup untuk
@@ -271,6 +276,7 @@ class Prefs(context: Context) {
         const val K_LAST_TEST = "last_test"
         const val K_WARP = "warp_enabled"
         const val K_WAS_UP = "was_up"
+        const val K_NOTIFICATION_REQUESTED = "notification_permission_requested"
         const val K_BOOT = "boot_last"
         const val K_EXCLUDED = "excluded_apps"
         const val K_MANUAL_EP = "manual_ep"
@@ -280,27 +286,21 @@ class Prefs(context: Context) {
         /**
          * Membuka penyimpanan terenkripsi, hanya itu.
          *
-         * Kegagalan pertama dicoba pulihkan SEKALI: penyebab tersering adalah berkas
-         * prefs terenkripsi yang rusak (mis. penulisan yang terputus di tengah), yang
-         * membuat `create()` gagal SELAMANYA sehingga aplikasi tidak bisa menyimpan apa
-         * pun. Berkas yang sudah terbukti tidak terbaca untuk kunci ini tidak menyimpan
-         * apa pun yang masih bisa diselamatkan, jadi ia dikosongkan lalu pembukaan
-         * diulang — data registrasinya memang hilang, tetapi aplikasi bisa mendaftar
-         * ulang (persis konsekuensi yang dipilih untuk perangkat era fallback polos:
-         * daftar ulang SEKALI).
-         *
-         * Kegagalan kedua berarti keystore-nya yang bermasalah. Di sini SENGAJA tidak
-         * ada fallback ke berkas polos (kunci privat tidak boleh tersimpan tanpa
-         * enkripsi, berapa pun harganya): lempar [KeystoreUnavailableException] dan
-         * biarkan pemanggil menjelaskannya ke pengguna.
+         * Kegagalan pertama dicoba ulang SEKALI untuk memberi kesempatan pada kegagalan
+         * sementara. Tidak ada penghapusan berkas di sini: `create()` melaporkan
+         * `GeneralSecurityException` atau `IOException`, tetapi kelas-kelas tersebut
+         * tidak membuktikan bahwa berkas korup dan tidak membedakan korupsi dari
+         * keystore yang tidak tersedia, key invalidation, atau kegagalan I/O sementara.
+         * Menghapus pada titik ini dapat menghilangkan private configuration secara
+         * permanen. Bila percobaan kedua gagal, lempar [KeystoreUnavailableException]
+         * tanpa fallback plaintext.
          */
         @Throws(KeystoreUnavailableException::class)
         private fun open(ctx: Context): SharedPreferences {
             try {
                 return openEncrypted(ctx).also { migrateLegacy(ctx, it) }
             } catch (e: Exception) {
-                VelumLog.w(TAG, "prefs terenkripsi gagal dibuka; berkas dikosongkan lalu dicoba ulang", e)
-                deleteEncryptedFile(ctx)
+                VelumLog.w(TAG, "prefs terenkripsi gagal dibuka; dicoba ulang tanpa menghapus data", e)
                 return try {
                     openEncrypted(ctx).also { migrateLegacy(ctx, it) }
                 } catch (kedua: Exception) {
@@ -320,15 +320,6 @@ class Prefs(context: Context) {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-        }
-
-        /** Menghapus berkas terenkripsi yang sudah terbukti tidak bisa dibuka. */
-        private fun deleteEncryptedFile(ctx: Context) {
-            try {
-                File(File(ctx.applicationInfo.dataDir, "shared_prefs"), "$FILE.xml").delete()
-            } catch (e: Exception) {
-                VelumLog.w(TAG, "gagal mengosongkan berkas prefs rusak", e)
-            }
         }
 
         /** Keberadaan berkas era lama, tanpa membuka/dekripsi isinya. */
