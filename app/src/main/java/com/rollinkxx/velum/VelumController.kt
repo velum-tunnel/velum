@@ -514,7 +514,7 @@ class VelumController(context: Context, private val ui: Ui) {
      * senyap yang sudah terbukti di lapangan (lihat dokumen kelas ini).
      */
     private fun awaitHandshake(maxWaitMs: Long): Boolean {
-        return VelumConnectionContract.awaitHandshake(app, maxWaitMs) { dead }
+        return VelumConnectionContract.awaitHandshake(app, maxWaitMs, cancelled = { dead })
     }
 
     /** Mencatat endpoint yang terbukti menghasilkan handshake (bukti > perkiraan RTT). */
