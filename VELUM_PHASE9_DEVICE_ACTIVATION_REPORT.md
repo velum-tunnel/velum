@@ -191,6 +191,8 @@ A real Android device and trusted persistent host cannot be created from this re
 
 ## Automated Quality
 
+The Phase 9 build workflow completed successfully: [run 35379594377](https://github.com/velum-tunnel/velum/actions/runs/35379594377), including unit tests, debug build, preview/R8, lint, release signing/verification, and artifact upload. The documentation workflow also completed successfully: run `35379594429`.
+
 All required gates passed after adding the activation package:
 
 | Gate | Result |
