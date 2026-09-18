@@ -1,16 +1,28 @@
-name: Android Emulator Test
+name: Android Emulator Smoke Test
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - audit/phase10-first-real-device
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: android-emulator-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  android-test:
+  android-emulator-smoke:
+    name: Emulator boot, install, and launch
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     strategy:
+      fail-fast: false
       matrix:
         api-level: [30]
 
@@ -19,60 +31,77 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Enable KVM (no-op check, GitHub-hosted runners never have it)
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Detect acceleration capability
+        shell: bash
         run: |
-          if [ -e /dev/kvm ]; then
-            echo "KVM tersedia (tidak biasa di hosted runner)."
+          set -euo pipefail
+          if [[ "${GITHUB_ACTIONS:-}" == "true" && "${RUNNER_ENVIRONMENT:-}" == "github-hosted" ]]; then
+            echo "GitHub-hosted runner terdeteksi; emulator akan memakai software rendering."
+          elif [[ -e /dev/kvm ]]; then
+            echo "KVM tersedia pada runner ini."
           else
-            echo "KVM tidak tersedia — akan pakai software rendering (swiftshader_indirect)."
+            echo "KVM tidak tersedia; emulator akan memakai software rendering."
           fi
+
+      - name: Build preview APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --stacktrace assemblePreview
+          apk="app/build/outputs/apk/preview/app-universal-preview.apk"
+          test -s "$apk"
+          echo "VELUM_APK=$apk" >> "$GITHUB_ENV"
 
       - name: Cache AVD
         uses: actions/cache@v4
-        id: avd-cache
         with:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-${{ matrix.api-level }}
+          key: avd-${{ runner.os }}-${{ matrix.api-level }}-v2
 
-      - name: Create AVD and generate snapshot for caching
-        if: steps.avd-cache.outputs.cache-hit != 'true'
+      - name: Run Velum smoke test on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: false
-          script: echo "Generated AVD snapshot for caching."
-
-      - name: Run tests on Android emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ matrix.api-level }}
-          arch: x86_64
-          force-avd-creation: false
+          force-avd-creation: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            adb devices
+            set -euo pipefail
+            adb devices -l
             adb wait-for-device
-            # Ganti baris di bawah dengan perintah build/test project kamu, contoh:
-            # ./gradlew connectedCheck
-            echo "Emulator siap dan device terdeteksi oleh ADB."
+            adb shell getprop ro.build.version.sdk
+            adb install -r "$VELUM_APK"
+            adb shell pm path com.rollinkxx.velum.preview
+            adb shell am start -W -n com.rollinkxx.velum.preview/com.rollinkxx.velum.MainActivity
+            adb shell dumpsys activity activities | grep -F 'com.rollinkxx.velum.preview' || true
+            adb logcat -d -t 300 > "$GITHUB_WORKSPACE/emulator-logcat.txt"
+            echo "Emulator boot, APK install, and Activity launch passed."
+            echo "VPN service, handshake, interface, and traffic remain unverified by this smoke test."
 
-      - name: Upload emulator logs on failure
-        if: failure()
+      - name: Upload emulator evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: emulator-logs
+          name: emulator-evidence-api-${{ matrix.api-level }}
           path: |
+            emulator-logcat.txt
             /tmp/emulator*.log
             ~/.android/avd/**/*.log
-          if-no-files-found: ignore
+          if-no-files-found: warn
+          retention-days: 14
