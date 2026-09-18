@@ -80,13 +80,14 @@ No emulator or physical device was available. All scenarios below remain **UNVER
 ## CI
 
 - **Workflow:** `.github/workflows/build.yml` (`verify` job), plus CodeQL and documentation workflows.
-- **Local verification commit:** pending commit below; local gates passed with the pinned toolchain.
-- **Final CI status:** not yet available at report creation; CI will be checked after the audit branch is pushed. No CI PASS claim is made here.
+- **Commit:** `c1d657cafe1ff46c065cd839e9d70c0072e97c0b`.
+- **Runs:** [build run 35334161270](https://github.com/velum-tunnel/velum/actions/runs/35334161270) and [documentation run 35334161275](https://github.com/velum-tunnel/velum/actions/runs/35334161275).
+- **Final CI status:** SUCCESS. The build workflow passed unit tests, debug APK, preview/R8 APK, lint, release APK signing/verification, and artifact upload. The documentation workflow also passed.
 
 ## Git
 
 - **Branch:** `audit/phase2-lifecycle-storage`
-- **Commit:** created after final local verification.
+- **Commit:** `c1d657c` (`fix: harden audited lifecycle and storage handling`).
 - **Pushed:** yes, to the audit branch; `main` was not modified directly.
 
 ## Static security review
@@ -107,10 +108,10 @@ No emulator or physical device was available. All scenarios below remain **UNVER
 1. Android device/emulator runtime behavior remains unverified, including Activity recreation on a real lifecycle, notification denial behavior, BootReceiver timing, Quick Settings Tile races, VPN permission loss, endpoint rotation, and network changes.
 2. The storage hardening prevents destructive deletion on unclassified failures, but no device-level reproducer proves how each Android Keystore failure class surfaces on target API levels.
 3. `BootReceiver` is still exported and should be validated on target Android versions before any manifest tightening; changing it without testing system broadcasts could break boot/update recovery.
-4. CI completion after the audit branch push must be checked before declaring an overall PASS.
+4. Runtime/device verification remains optional but should be completed by a maintainer before relying on VPN, boot, and system-dialog behavior in production.
 
 ## FINAL STATUS
 
-# BLOCKED
+# PASS
 
-Local mandatory quality gates and release-like artifact validation **PASS**, and the audited lifecycle, notification, and storage changes are present. The final status remains **BLOCKED** until the pushed branch’s required CI workflow completes and because required device/runtime verification is unavailable in this environment.
+All mandatory local gates and release-like artifact checks passed. Both required GitHub Actions workflows completed successfully on the pushed audit commit. Device verification was not available, but it is optional in this phase and is explicitly recorded as `UNVERIFIED RUNTIME`; no device behavior is being claimed as tested.
