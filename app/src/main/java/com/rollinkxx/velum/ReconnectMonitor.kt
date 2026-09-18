@@ -8,17 +8,16 @@ import android.net.VpnService
 import android.os.SystemClock
 import com.wireguard.android.backend.Tunnel
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 /**
  * Menjaga tunnel tetap tersambung saat konektivitas berubah (pindah Wi-Fi/data,
  * putus sesaat) dengan memantul tunnel sekali pakai backoff.
  *
- * Lingkup aplikasi, bukan Activity: tetap bekerja walau UI ditutup. Yang menahan proses
- * tetap hidup selama tunnel UP adalah **VPN yang aktif** (VpnService yang sudah
- * `establish()`), BUKAN layanan latar depan — `GoBackend` tidak pernah memanggil
- * `startForeground` (diverifikasi pada sumber upstream tag `1.0.20260102`), jadi jangan
- * menyandarkan penalaran tentang umur proses pada anggapan ada FGS.
+ * Lingkup aplikasi, bukan Activity: tetap bekerja walau UI ditutup. Companion foreground
+ * service membantu menaikkan process importance, sedangkan TUN tetap dimiliki oleh
+ * VpnService library.
  * Aktif hanya bila diniatkan tersambung ([Prefs.wasUp]); putus manual menghentikannya.
  */
 object ReconnectMonitor {
@@ -34,9 +33,13 @@ object ReconnectMonitor {
     private val BACKOFF_MS = longArrayOf(2000, 5000, 10000, 30000, 60000)
 
     private val worker = Executors.newSingleThreadExecutor()
+    private val healthScheduler = Executors.newSingleThreadScheduledExecutor()
 
     @Volatile
     private var callback: ConnectivityManager.NetworkCallback? = null
+
+    @Volatile
+    private var healthTask: ScheduledFuture<*>? = null
 
     @Volatile
     private var lastBounceMs = 0L
@@ -80,6 +83,12 @@ object ReconnectMonitor {
             return
         }
         callback = cb
+        healthTask = healthScheduler.scheduleWithFixedDelay(
+            { refreshLinkHealth(app) },
+            0L,
+            15L,
+            TimeUnit.SECONDS
+        )
         // Callback awal untuk default network yang sudah aktif sengaja didebounce. Boot atau
         // update tetap perlu satu pemicu recovery eksplisit agar tunnel tidak macet DOWN bila
         // percobaan pertama gagal sementara network tidak berubah lagi.
@@ -89,13 +98,35 @@ object ReconnectMonitor {
     /** Berhenti memantau; aman dipanggil berulang. Panggil saat putus manual. */
     @Synchronized
     fun stop(context: Context) {
-        val cb = callback ?: return
+        val cb = callback ?: run {
+            healthTask?.cancel(false)
+            healthTask = null
+            return
+        }
         callback = null
+        healthTask?.cancel(false)
+        healthTask = null
         try {
             context.applicationContext.getSystemService(ConnectivityManager::class.java)
                 ?.unregisterNetworkCallback(cb)
         } catch (e: Exception) {
             VelumLog.w(TAG, "gagal melepas network callback", e)
+        }
+    }
+
+    /** Health tetap diperbarui walau Activity ditutup; state UP saja bukan bukti internet. */
+    private fun refreshLinkHealth(app: Context) {
+        val stats = VelumTunnel.traffic(app)
+        val health = VelumLinkHealthDecision.decide(
+            tunnelUp = VelumTunnel.state == Tunnel.State.UP,
+            statisticsReadable = stats != null,
+            latestHandshakeEpochMs = stats?.latestHandshakeMs ?: 0L,
+            nowEpochMs = System.currentTimeMillis()
+        )
+        VelumLinkHealthStore.update(health)
+        if (VelumTunnel.state == Tunnel.State.UP) StatusNotifier.show(app)
+        if (health == VelumLinkHealth.OFFLINE && VelumTunnel.state == Tunnel.State.UP) {
+            recoverIfNeeded(app, VelumRecoveryDecision.Trigger.NETWORK)
         }
     }
 

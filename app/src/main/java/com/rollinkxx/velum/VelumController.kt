@@ -45,6 +45,7 @@ class VelumController(context: Context, private val ui: Ui) {
         fun setTestTextRes(resId: Int)
         fun showTest(result: VelumTestResult?)
         fun render(state: Tunnel.State)
+        fun renderHealth(health: VelumLinkHealth)
         fun onConnectedVisual()
         fun onDisconnectedVisual()
         fun refreshStaticInfo()
@@ -63,6 +64,9 @@ class VelumController(context: Context, private val ui: Ui) {
 
     /** Status tunnel terakhir yang diketahui (sumber: backend WireGuard). */
     val state: Tunnel.State get() = VelumTunnel.state
+
+    /** Kesehatan link terakhir; berbeda dari state interface TUN. */
+    val linkHealth: VelumLinkHealth get() = VelumLinkHealthStore.current
 
     /**
      * Diawali dari status tunnel yang SEBENARNYA, bukan dari `DOWN` tetap.
@@ -199,7 +203,12 @@ class VelumController(context: Context, private val ui: Ui) {
     }
 
     /** Terapkan status yang diketahui saat ini ke UI (mis. setelah Activity hidup lagi). */
-    fun applyCurrentState() = applyState(VelumTunnel.state)
+    fun applyCurrentState() {
+        applyState(VelumTunnel.state)
+        onUi { ui.renderHealth(VelumLinkHealthStore.current) }
+    }
+
+    fun applyCurrentHealth() = onUi { ui.renderHealth(VelumLinkHealthStore.current) }
 
     /** Sinkronkan status dengan backend di latar, lalu jalankan [onDone] di main thread. */
     fun refreshStateAsync(onDone: () -> Unit) {
@@ -208,6 +217,7 @@ class VelumController(context: Context, private val ui: Ui) {
             main.post {
                 if (dead) return@post // layar sudah ditutup: jangan sentuh UI, jangan lanjut
                 applyState(s)
+                ui.renderHealth(VelumLinkHealthStore.current)
                 onDone()
             }
         }

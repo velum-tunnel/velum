@@ -6,6 +6,8 @@
     <string name="status_disconnected">Terputus</string>
     <string name="status_connecting">Menyambung…</string>
     <string name="status_connected">Tersambung</string>
+    <string name="status_degraded">Koneksi bermasalah</string>
+    <string name="status_offline">Koneksi offline</string>
     <string name="status_connected_variant_1">Koneksi terlindungi</string>
     <string name="status_connected_variant_2">Terhubung dengan aman</string>
     <string name="status_connected_variant_3">Jalur privat aktif</string>
@@ -23,6 +25,8 @@
     <string name="reset_confirm_body">Registrasi perangkat ini dihapus dari server lalu didaftarkan ulang. Sambungan diputus dan Velum tidak akan tersambung otomatis saat boot sampai Anda menekan Sambungkan lagi.</string>
     <string name="cd_status_up">Status: tersambung</string>
     <string name="cd_status_down">Status: terputus</string>
+    <string name="cd_status_degraded">Status: koneksi bermasalah</string>
+    <string name="cd_status_offline">Status: koneksi offline</string>
     <string name="btn_vpn_settings">Selalu aktif</string>
     <string name="btn_copy_diag">Salin diagnostik</string>
     <string name="btn_exclusions">Kecualikan aplikasi</string>
@@ -57,6 +61,9 @@
     <string name="diag_copied">Ringkasan disalin (tanpa kunci &amp; alamat IP Anda)</string>
     <string name="err_no_settings">Pengaturan VPN tidak tersedia di perangkat ini</string>
     <string name="notif_channel">Status koneksi</string>
+    <string name="notif_connecting">Mempertahankan koneksi Velum</string>
+    <string name="notif_degraded">Koneksi bermasalah — mencoba menyambung ulang</string>
+    <string name="notif_offline">Tidak ada jalur internet — menunggu pemulihan</string>
     <string name="notif_connected">Tersambung — lalu lintas lewat Velum</string>
     <string name="test_waiting">Menunggu data…</string>
     <string name="test_searching">Mencari endpoint lain…</string>
@@ -79,6 +86,8 @@
     <string name="data_format">↓ %1$s/s · ↑ %2$s/s</string>
     <string name="data_total_format">Total ↓ %1$s · ↑ %2$s</string>
     <string name="stale_warn">Tersambung, tetapi tidak ada lalu lintas. Coba Putuskan lalu Sambungkan.</string>
+    <string name="link_degraded_message">Tunnel aktif, tetapi handshake terbaru belum terlihat. Velum sedang memantau dan mencoba pemulihan.</string>
+    <string name="link_offline_message">Tidak ada jalur internet yang tervalidasi. Velum akan mencoba menyambung ulang; tekan Putuskan untuk menghentikannya.</string>
     <string name="value_none">—</string>
     <string name="err_vpn_denied">Izin VPN ditolak</string>
     <string name="err_register">Registrasi gagal: %1$s</string>

@@ -526,6 +526,33 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
         refreshAlwaysOn()
     }
 
+    override fun renderHealth(health: VelumLinkHealth) {
+        if (controller.busy || controller.state != Tunnel.State.UP) return
+        when (health) {
+            VelumLinkHealth.CONNECTED -> {
+                statusView.setText(R.string.status_connected)
+                statusView.setTextColor(getColor(R.color.ok))
+                statusDot.setBackgroundResource(R.drawable.dot_ok)
+                statusDot.contentDescription = getString(R.string.cd_status_up)
+                renderMessage("")
+            }
+            VelumLinkHealth.DEGRADED -> {
+                statusView.setText(R.string.status_degraded)
+                statusView.setTextColor(getColor(R.color.accent))
+                statusDot.setBackgroundResource(R.drawable.dot_warn)
+                statusDot.contentDescription = getString(R.string.cd_status_degraded)
+                renderMessage(getString(R.string.link_degraded_message))
+            }
+            VelumLinkHealth.OFFLINE -> {
+                statusView.setText(R.string.status_offline)
+                statusView.setTextColor(getColor(R.color.accent))
+                statusDot.setBackgroundResource(R.drawable.dot_warn)
+                statusDot.contentDescription = getString(R.string.cd_status_offline)
+                renderMessage(getString(R.string.link_offline_message))
+            }
+        }
+    }
+
     override fun render(state: Tunnel.State) {
         // Efek samping sudah dijalankan controller; di sini hanya mengganti tampilan,
         // dan tidak menimpa teks status sementara ("Menyambung…", "Memutus…").
@@ -538,6 +565,7 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
                 statusDot.setBackgroundResource(R.drawable.dot_ok)
                 statusDot.contentDescription = getString(R.string.cd_status_up)
                 toggleButton.setText(R.string.btn_disconnect)
+                renderHealth(controller.linkHealth)
             }
             else -> {
                 statusView.setText(R.string.status_disconnected)
@@ -588,10 +616,20 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
         controller.runStats { t ->
             if (controller.state != Tunnel.State.UP) return@runStats
             if (t == null) {
+                VelumLinkHealthStore.update(VelumLinkHealth.DEGRADED)
+                renderHealth(VelumLinkHealth.DEGRADED)
                 setTextIfChanged(infoData, getString(R.string.value_none))
                 return@runStats
             }
             val nowMs = SystemClock.elapsedRealtime()
+            val health = VelumLinkHealthDecision.decide(
+                tunnelUp = true,
+                statisticsReadable = true,
+                latestHandshakeEpochMs = t.latestHandshakeMs,
+                nowEpochMs = System.currentTimeMillis()
+            )
+            VelumLinkHealthStore.update(health)
+            renderHealth(health)
             val rates = rate.add(t.rxBytes, t.txBytes, nowMs)
             setTextIfChanged(infoData, renderData(rates, t.rxBytes, t.txBytes))
             if (t.rxBytes != lastRxBytes || t.txBytes != lastTxBytes) {

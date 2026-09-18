@@ -11,24 +11,29 @@ import android.os.Build
 /**
  * Notifikasi persisten status koneksi pada kanal aplikasi sendiri.
  *
- * **Koreksi atas komentar lama di sini:** dulu berkas ini menyebut "terpisah dari
- * notifikasi foreground-service milik library WireGuard" — library itu tidak memposting
- * notifikasi apa pun. `GoBackend` tidak pernah memanggil `startForeground` (diperiksa
- * pada sumber upstream tag `1.0.20260102`), jadi satu-satunya notifikasi lain yang
- * terlihat pengguna saat tunnel UP adalah milik **sistem** (ikon kunci / notifikasi VPN
- * aktif), bukan milik library.
+ * Library WireGuard tetap tidak memanggil `startForeground`; VelumForegroundService
+ * app-owned memakai notification ID/channel yang sama agar tidak membuat notification
+ * ganda. Notification diperbarui dengan kesehatan link, bukan hanya state TUN.
  *
  * Tanpa dependensi: memakai Notification framework bawaan. Izin POST_NOTIFICATIONS
  * (Android 13+) diminta dari MainActivity; bila pengguna menolak, notify() di-skip aman.
  */
 object StatusNotifier {
-    private const val CHANNEL_ID = "status"
-    private const val NOTIF_ID = 42
+    internal const val CHANNEL_ID = "status"
+    internal const val NOTIF_ID = 42
 
     fun show(context: Context) {
         val mgr = context.getSystemService(NotificationManager::class.java) ?: return
+        try {
+            mgr.notify(NOTIF_ID, notification(context))
+        } catch (_: SecurityException) {
+            // Izin notifikasi ditolak (Android 13+) — status bar saja yang hilang.
+        }
+    }
+
+    fun notification(context: Context): Notification {
         if (Build.VERSION.SDK_INT >= 26) {
-            mgr.createNotificationChannel(
+            context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_ID,
                     context.getString(R.string.notif_channel),
@@ -51,19 +56,26 @@ object StatusNotifier {
         val notif = builder
             .setSmallIcon(R.drawable.ic_launcher_tile)
             .setContentTitle(context.getString(R.string.app_name))
-            .setContentText(ConnectedSubtitle.forSession(context, VelumTunnel.upSinceElapsedMs))
+            .setContentText(
+                when (VelumLinkHealthStore.current) {
+                    VelumLinkHealth.CONNECTED ->
+                        ConnectedSubtitle.forSession(context, VelumTunnel.upSinceElapsedMs)
+                    VelumLinkHealth.DEGRADED -> context.getString(R.string.notif_degraded)
+                    VelumLinkHealth.OFFLINE -> context.getString(R.string.notif_offline)
+                }
+            )
             .setContentIntent(tap)
             .setOngoing(true)
             .setOnlyAlertOnce(true) // pembaruan teks tidak perlu mengganggu lagi
             .build()
-        try {
-            mgr.notify(NOTIF_ID, notif)
-        } catch (_: SecurityException) {
-            // Izin notifikasi ditolak (Android 13+) — status bar saja yang hilang.
-        }
+        return notif
     }
 
     fun hide(context: Context) {
-        context.getSystemService(NotificationManager::class.java)?.cancel(NOTIF_ID)
+        try {
+            context.getSystemService(NotificationManager::class.java)?.cancel(NOTIF_ID)
+        } catch (_: SecurityException) {
+            // Izin notifikasi ditolak (Android 13+) — tidak ada notification untuk dihapus.
+        }
     }
 }

@@ -133,6 +133,8 @@ lakukan secepat yang wajar, lalu baca baris `Niat`.
 | B4 | V1 | Putuskan **secara manual** dari aplikasi. Lalu matikan-hidupkan jaringan. Buka diagnostik. | Tunnel **tetap mati**: `Status: Terputus`, `Niat: Mati`, `Pemantau: mati` | `Pemantau: aktif` atau tunnel hidup lagi = niat "putus" tidak dihormati |
 | B5 | V1 | Sambungkan. Matikan jaringan, biarkan **2 menit**, hidupkan lagi. Tunggu 1 menit, buka diagnostik. | `Status: Tersambung` pulih sendiri tanpa Anda menyentuh aplikasi | Tidak pulih = pemantau menyerah terlalu cepat |
 | B6 | V1 | Sambungkan, lalu swipe Velum dari **Recent Apps** tanpa menekan Putuskan. Tunggu 1 menit dan buka lagi dari launcher. | VPN tetap tersambung atau pulih otomatis; `Niat: Hidup`, `Pemantau: aktif`. Swipe hanya menutup UI | `Niat: Mati`, `Pemantau: mati`, atau tunnel tidak pulih = swipe masih diperlakukan sebagai disconnect |
+| B7 | V1 | Sambungkan, cabut internet, lalu buka aplikasi setelah 15–60 detik. | Status berubah dari `Tersambung` menjadi `Koneksi bermasalah` atau `Koneksi offline`; notification menjelaskan pemulihan | Tetap `Tersambung` setelah handshake stale = health monitor tidak bekerja |
+| B8 | V1 | Sambungkan, swipe aplikasi dari Recent Apps, lalu biarkan layar mati 5 menit. | Notification Velum tetap ada; `Niat: Hidup`; setelah internet dipulihkan, koneksi kembali atau status recovery terlihat | Notification hilang dan tidak ada recovery = foreground service atau lifecycle VPN mati |
 
 ## Kelompok C — pengecualian aplikasi (V1, lewat situs pemeriksa IP)
 

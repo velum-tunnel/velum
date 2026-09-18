@@ -21,9 +21,18 @@ object VelumConnectionContract {
     ): Boolean {
         if (cancelled()) return false
         val minimumHandshakeEpochMs = System.currentTimeMillis()
+        VelumForegroundService.start(context)
         VelumTunnel.up(context, prefs)
         val valid = verify(context, maxWaitMs, cancelled, minimumHandshakeEpochMs)
-        if (!valid && !cancelled()) runCatching { VelumTunnel.down(context) }
+        if (!valid && !cancelled()) {
+            runCatching { VelumTunnel.down(context) }
+            VelumForegroundService.stop(context)
+            VelumLinkHealthStore.update(VelumLinkHealth.OFFLINE)
+        }
+        if (valid) {
+            VelumLinkHealthStore.update(VelumLinkHealth.CONNECTED)
+            StatusNotifier.show(context)
+        }
         return valid
     }
 
@@ -36,9 +45,18 @@ object VelumConnectionContract {
     ): Boolean {
         if (cancelled()) return false
         val minimumHandshakeEpochMs = System.currentTimeMillis()
+        VelumForegroundService.start(context)
         VelumTunnel.restart(context, prefs, shouldContinue = { !cancelled() })
         val valid = verify(context, maxWaitMs, cancelled, minimumHandshakeEpochMs)
-        if (!valid && !cancelled()) runCatching { VelumTunnel.down(context) }
+        if (!valid && !cancelled()) {
+            runCatching { VelumTunnel.down(context) }
+            VelumForegroundService.stop(context)
+            VelumLinkHealthStore.update(VelumLinkHealth.OFFLINE)
+        }
+        if (valid) {
+            VelumLinkHealthStore.update(VelumLinkHealth.CONNECTED)
+            StatusNotifier.show(context)
+        }
         return valid
     }
 

@@ -12,8 +12,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Pengelola tunnel WARP berbasis WireGuard (GoBackend).
- * Singleton ringan: satu backend, satu tunnel, tanpa service tambahan —
- * VpnService milik library yang menjaga proses tetap hidup selama tersambung.
+ * Singleton ringan: satu backend dan satu tunnel; VelumForegroundService companion
+ * menaikkan process importance, sementara VpnService library tetap membuat TUN.
  *
  * **Kelas ini pemilik tunggal keadaan koneksi.** Dalam satu proses ada beberapa pelaku
  * yang bisa menyalakan atau mematikan tunnel — layar utama, ubin pengaturan cepat,
@@ -67,6 +67,9 @@ object VelumTunnel : Tunnel {
     /** Callback UI; dipanggil dari thread backend, penerima harus pindah ke main thread sendiri. */
     @Volatile
     var listener: ((Tunnel.State) -> Unit)? = null
+
+    @Volatile
+    private var retainingForegroundForRestart = false
 
     /**
      * Generasi niat pengguna, milik **proses** — bukan milik satu layar atau satu pelaku.
@@ -134,9 +137,17 @@ object VelumTunnel : Tunnel {
         } else {
             upSinceElapsedMs = 0L
         }
-        updateNotification(newState)
+        if (newState == Tunnel.State.UP || !retainingForegroundForRestart) {
+            updateNotification(newState)
+        }
         listener?.invoke(newState)
         if (newState == Tunnel.State.DOWN) {
+            if (!retainingForegroundForRestart) {
+                appContext?.let {
+                    VelumForegroundService.stop(it)
+                    VelumLinkHealthStore.update(VelumLinkHealth.OFFLINE)
+                }
+            }
             // Putus manual sudah lebih dulu menulis wasUp=false dan menaikkan generasi niat;
             // recovery otomatis karena state DOWN akan langsung batal pada guard yang sama.
             appContext?.let { ReconnectMonitor.recoverIfNeeded(it, VelumRecoveryDecision.Trigger.TUNNEL_DOWN) }
@@ -211,9 +222,22 @@ object VelumTunnel : Tunnel {
     @Throws(Exception::class)
     fun restart(context: Context, prefs: Prefs, shouldContinue: () -> Boolean = { prefs.wasUp }) {
         val b = backend(context)
-        b.setState(this, Tunnel.State.DOWN, null)
-        if (!shouldContinue()) return // intent baru membatalkan sebelum tunnel dihidupkan lagi
-        b.setState(this, Tunnel.State.UP, buildConfig(prefs))
+        retainingForegroundForRestart = true
+        var restartedUp = false
+        try {
+            b.setState(this, Tunnel.State.DOWN, null)
+            if (!shouldContinue()) return // intent baru membatalkan sebelum tunnel dihidupkan lagi
+            b.setState(this, Tunnel.State.UP, buildConfig(prefs))
+            restartedUp = true
+        } finally {
+            retainingForegroundForRestart = false
+            if (!restartedUp) {
+                appContext?.let {
+                    VelumForegroundService.stop(it)
+                    VelumLinkHealthStore.update(VelumLinkHealth.OFFLINE)
+                }
+            }
+        }
     }
 
     /** Hasil baca statistik transfer dari backend; null bila gagal. */
