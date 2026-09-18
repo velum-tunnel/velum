@@ -115,8 +115,12 @@ class VelumController(context: Context, private val ui: Ui) {
     @Volatile
     private var dead = false
 
+    private val listenerToken: Int
+
     init {
-        VelumTunnel.listener = { newState -> main.post { applyState(newState) } }
+        listenerToken = VelumTunnel.registerListener { newState ->
+            main.post { applyState(newState) }
+        }
     }
 
     /**
@@ -129,7 +133,7 @@ class VelumController(context: Context, private val ui: Ui) {
      */
     fun destroy() {
         dead = true
-        VelumTunnel.listener = null
+        VelumTunnel.unregisterListener(listenerToken)
         cancelPendingTest()
         worker.shutdown()
         testWorker.shutdown()
@@ -400,7 +404,8 @@ class VelumController(context: Context, private val ui: Ui) {
     }
 
     fun disconnect() {
-        VelumTunnel.cancelIntent(prefs)
+        val cancellationPersisted = VelumTunnel.cancelIntent(prefs)
+        if (!cancellationPersisted) onUi { ui.setMessageRes(R.string.err_storage) }
         // Putuskan juga harus membatalkan retry uji yang tertunda; jika tidak, retry
         // dapat menulis kembali status uji setelah tunnel sudah dimatikan pengguna.
         cancelPendingTest()
@@ -416,7 +421,8 @@ class VelumController(context: Context, private val ui: Ui) {
     /** Hapus registrasi dan putuskan; UI bertanggung jawab meminta konfirmasi dulu. */
     fun reset() {
         if (busy) return
-        VelumTunnel.cancelIntent(prefs)
+        val cancellationPersisted = VelumTunnel.cancelIntent(prefs)
+        if (!cancellationPersisted) onUi { ui.setMessageRes(R.string.err_storage) }
         setBusy(true)
         cancelPendingTest()
         ReconnectMonitor.stop(app)

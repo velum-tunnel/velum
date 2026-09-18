@@ -3,9 +3,12 @@ name: build
 on:
   push:
     branches: ["**"]
+    tags: ["v*"]
     paths-ignore:
       - "**.md"
       - "docs/**"
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 
 concurrency:
@@ -23,8 +26,7 @@ jobs:
   # sekali dan tugas berikutnya memakai ulang cache konfigurasi & build yang panas.
   #
   # Urutan sengaja: unit test dulu (paling cepat gagal, paling murah), lalu
-  # assembleDebug (pemblokir utama), lalu lint (advisori, tidak boleh menggagalkan
-  # job — karena itu `continue-on-error` per-step, bukan per-job).
+  # assembleDebug, preview/R8, dan lint sebagai quality gate yang memblokir.
   verify:
     name: verifikasi (build, tes, lint)
     runs-on: ubuntu-latest
@@ -97,12 +99,9 @@ jobs:
             python3 .github/scripts/anotasikan-log.py "$RUNNER_TEMP/preview.log"
           fi
 
-      # ADVISORI: temuan lint tidak boleh menggagalkan job (lihat batasan artifact CI sandbox),
-      # tetapi tetap dijaga hijau. continue-on-error dipasang di step ini saja.
-      - name: Lint debug (advisori)
+      - name: Lint debug (quality gate)
         id: lint
         if: always() && steps.assemble.conclusion != 'cancelled'
-        continue-on-error: true
         run: ./gradlew --no-daemon --stacktrace lintDebug
 
       - name: Tampilkan temuan lint
@@ -199,7 +198,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [verify]
-    if: vars.ENABLE_RELEASE_SIGNING == 'true'
+    # Signing material must never be exposed to arbitrary feature branches.
+    # Use a protected main branch or immutable version tag; a later hardening step
+    # should additionally move these secrets into a required-review environment.
+    if: vars.ENABLE_RELEASE_SIGNING == 'true' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     steps:
       - uses: actions/checkout@v7
 

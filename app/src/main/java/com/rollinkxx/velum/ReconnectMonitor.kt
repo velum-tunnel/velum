@@ -90,7 +90,16 @@ object ReconnectMonitor {
         }
         callback = cb
         healthTask = healthScheduler.scheduleWithFixedDelay(
-            { refreshLinkHealth(app) },
+            {
+                try {
+                    refreshLinkHealth(app)
+                } catch (e: Throwable) {
+                    // ScheduledExecutorService suppresses all later executions when
+                    // a periodic task escapes with an exception. Keep health monitoring
+                    // alive and expose only a bounded diagnostic category.
+                    VelumLog.w(TAG, "refresh health gagal; pemantauan dilanjutkan", e)
+                }
+            },
             0L,
             15L,
             TimeUnit.SECONDS

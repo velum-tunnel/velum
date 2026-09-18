@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * pelaku yang berbeda. Untuk itu ada [bumpIntent]/[intentStale] — lihat dokumentasinya.
  */
 object VelumTunnel : Tunnel {
+    private const val TAG = "VelumTunnel"
     private const val NAME = "velum"
     private const val MTU = 1280
     private const val DNS = "1.1.1.1, 1.0.0.1"
@@ -66,7 +67,21 @@ object VelumTunnel : Tunnel {
 
     /** Callback UI; dipanggil dari thread backend, penerima harus pindah ke main thread sendiri. */
     @Volatile
-    var listener: ((Tunnel.State) -> Unit)? = null
+    private var listener: ((Tunnel.State) -> Unit)? = null
+
+    private val listenerGeneration = AtomicInteger(0)
+
+    /** Pasang listener dan kembalikan token yang wajib dipakai saat unregister. */
+    fun registerListener(callback: (Tunnel.State) -> Unit): Int {
+        val token = listenerGeneration.incrementAndGet()
+        listener = callback
+        return token
+    }
+
+    /** Hanya pemilik listener saat ini yang boleh menghapusnya. */
+    fun unregisterListener(token: Int) {
+        if (listenerGeneration.get() == token) listener = null
+    }
 
     @Volatile
     private var retainingForegroundForRestart = false
@@ -118,12 +133,15 @@ object VelumTunnel : Tunnel {
         return prefs.setWasUpDurable(false)
     }
 
-    /** Membatalkan intent dan memo UP sebagai satu operasi terhadap koneksi lama. */
+    /** Membatalkan intent dan mengembalikan apakah memo UP tersimpan secara durabel. */
     @Synchronized
-    fun cancelIntent(prefs: Prefs): Int {
-        val gen = intentGen.incrementAndGet()
-        prefs.setWasUpDurable(false)
-        return gen
+    fun cancelIntent(prefs: Prefs): Boolean {
+        intentGen.incrementAndGet()
+        val persisted = prefs.setWasUpDurable(false)
+        if (!persisted) {
+            VelumLog.e(TAG, "pembatalan koneksi gagal tersimpan secara durabel")
+        }
+        return persisted
     }
 
     override fun getName(): String = NAME

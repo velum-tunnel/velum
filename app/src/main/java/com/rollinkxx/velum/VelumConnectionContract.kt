@@ -22,18 +22,19 @@ object VelumConnectionContract {
         if (cancelled()) return false
         val minimumHandshakeEpochMs = System.currentTimeMillis()
         VelumForegroundService.start(context)
-        VelumTunnel.up(context, prefs)
-        val valid = verify(context, maxWaitMs, cancelled, minimumHandshakeEpochMs)
-        if (!valid && !cancelled()) {
-            runCatching { VelumTunnel.down(context) }
-            VelumForegroundService.stop(context)
-            VelumLinkHealthStore.update(VelumLinkHealth.OFFLINE)
+        return try {
+            VelumTunnel.up(context, prefs)
+            val valid = verify(context, maxWaitMs, cancelled, minimumHandshakeEpochMs)
+            if (!valid && !cancelled()) rollback(context)
+            if (valid) {
+                VelumLinkHealthStore.update(VelumLinkHealth.CONNECTED)
+                StatusNotifier.show(context)
+            }
+            valid
+        } catch (e: Throwable) {
+            if (!cancelled()) rollback(context)
+            throw e
         }
-        if (valid) {
-            VelumLinkHealthStore.update(VelumLinkHealth.CONNECTED)
-            StatusNotifier.show(context)
-        }
-        return valid
     }
 
     /** Satu primitive restart endpoint: transisi atomik lalu handshake wajib. */
@@ -46,18 +47,26 @@ object VelumConnectionContract {
         if (cancelled()) return false
         val minimumHandshakeEpochMs = System.currentTimeMillis()
         VelumForegroundService.start(context)
-        VelumTunnel.restart(context, prefs, shouldContinue = { !cancelled() })
-        val valid = verify(context, maxWaitMs, cancelled, minimumHandshakeEpochMs)
-        if (!valid && !cancelled()) {
-            runCatching { VelumTunnel.down(context) }
-            VelumForegroundService.stop(context)
-            VelumLinkHealthStore.update(VelumLinkHealth.OFFLINE)
+        return try {
+            VelumTunnel.restart(context, prefs, shouldContinue = { !cancelled() })
+            val valid = verify(context, maxWaitMs, cancelled, minimumHandshakeEpochMs)
+            if (!valid && !cancelled()) rollback(context)
+            if (valid) {
+                VelumLinkHealthStore.update(VelumLinkHealth.CONNECTED)
+                StatusNotifier.show(context)
+            }
+            valid
+        } catch (e: Throwable) {
+            if (!cancelled()) rollback(context)
+            throw e
         }
-        if (valid) {
-            VelumLinkHealthStore.update(VelumLinkHealth.CONNECTED)
-            StatusNotifier.show(context)
-        }
-        return valid
+    }
+
+    /** Roll back both tunnel and companion service after an unsuccessful attempt. */
+    private fun rollback(context: Context) {
+        runCatching { VelumTunnel.down(context) }
+        VelumForegroundService.stop(context)
+        VelumLinkHealthStore.update(VelumLinkHealth.OFFLINE)
     }
 
     /** Memverifikasi tunnel yang sudah dibangun, termasuk handshake WireGuard. */
