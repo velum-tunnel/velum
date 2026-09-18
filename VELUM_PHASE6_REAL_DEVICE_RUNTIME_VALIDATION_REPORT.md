@@ -222,6 +222,10 @@ No logcat, dumpsys, `ip addr`, `ip route`, device screenshot, handshake timestam
 
 A physical Android device, approved remote Android device, device farm, or host with functional hardware acceleration is required before the mandatory runtime chain can be executed. GitHub-hosted build success does not provide real-device validation. Repeating the known `/dev/kvm`-blocked emulator attempt would not change the infrastructure result.
 
+## CI
+
+The Phase 6 build workflow completed successfully: [run 35348883531](https://github.com/velum-tunnel/velum/actions/runs/35348883531), including unit tests, debug build, preview/R8, lint, release signing/verification, and artifact upload. The documentation workflow also completed successfully: run `35348872889`.
+
 ## Runtime Test Matrix
 
 | Test | Device | Result | Evidence | Notes |
