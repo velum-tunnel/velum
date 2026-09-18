@@ -40,4 +40,33 @@ class VelumLinkHealthTest {
             )
         )
     }
+
+    @Test
+    fun trafikAktifTetapConnectedWalauHandshakeLama() {
+        val now = 1_000_000L
+        assertEquals(
+            VelumLinkHealth.CONNECTED,
+            VelumLinkHealthDecision.decide(
+                tunnelUp = true,
+                statisticsReadable = true,
+                latestHandshakeEpochMs = now - 15 * 60_000L,
+                nowEpochMs = now,
+                trafficActive = true
+            )
+        )
+    }
+
+    @Test
+    fun trafikAktifDenganHandshakeNolTetapConnected() {
+        assertEquals(
+            VelumLinkHealth.CONNECTED,
+            VelumLinkHealthDecision.decide(
+                tunnelUp = true,
+                statisticsReadable = true,
+                latestHandshakeEpochMs = 0L,
+                nowEpochMs = 1_000L,
+                trafficActive = true
+            )
+        )
+    }
 }

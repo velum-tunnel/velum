@@ -86,8 +86,8 @@
     <string name="data_format">↓ %1$s/s · ↑ %2$s/s</string>
     <string name="data_total_format">Total ↓ %1$s · ↑ %2$s</string>
     <string name="stale_warn">Tersambung, tetapi tidak ada lalu lintas. Coba Putuskan lalu Sambungkan.</string>
-    <string name="link_degraded_message">Tunnel aktif, tetapi handshake terbaru belum terlihat. Velum sedang memantau dan mencoba pemulihan.</string>
-    <string name="link_offline_message">Tidak ada jalur internet yang tervalidasi. Velum akan mencoba menyambung ulang; tekan Putuskan untuk menghentikannya.</string>
+    <string name="link_degraded_message">Tunnel aktif, tetapi handshake atau trafik terbaru belum terlihat. Velum sedang memantau dan mencoba pemulihan.</string>
+    <string name="link_offline_message">Tidak ada handshake maupun trafik yang tervalidasi. Velum akan mencoba menyambung ulang; tekan Putuskan untuk menghentikannya.</string>
     <string name="value_none">—</string>
     <string name="err_vpn_denied">Izin VPN ditolak</string>
     <string name="err_register">Registrasi gagal: %1$s</string>

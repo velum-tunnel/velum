@@ -15,10 +15,13 @@ object VelumLinkHealthDecision {
         tunnelUp: Boolean,
         statisticsReadable: Boolean,
         latestHandshakeEpochMs: Long,
-        nowEpochMs: Long
+        nowEpochMs: Long,
+        trafficActive: Boolean = false
     ): VelumLinkHealth {
         if (!tunnelUp) return VelumLinkHealth.OFFLINE
-        if (!statisticsReadable || latestHandshakeEpochMs <= 0L) return VelumLinkHealth.DEGRADED
+        if (!statisticsReadable) return VelumLinkHealth.DEGRADED
+        if (trafficActive) return VelumLinkHealth.CONNECTED
+        if (latestHandshakeEpochMs <= 0L) return VelumLinkHealth.DEGRADED
         val age = (nowEpochMs - latestHandshakeEpochMs).coerceAtLeast(0L)
         return when {
             age >= OFFLINE_AFTER_MS -> VelumLinkHealth.OFFLINE

@@ -44,6 +44,12 @@ object ReconnectMonitor {
     @Volatile
     private var lastBounceMs = 0L
 
+    @Volatile
+    private var lastRxBytes = -1L
+
+    @Volatile
+    private var lastTxBytes = -1L
+
     /** Claim atomik: callback network dan recovery state-down tidak boleh membuat dua job. */
     private val bouncing = VelumRecoveryClaim()
 
@@ -101,11 +107,15 @@ object ReconnectMonitor {
         val cb = callback ?: run {
             healthTask?.cancel(false)
             healthTask = null
+            lastRxBytes = -1L
+            lastTxBytes = -1L
             return
         }
         callback = null
         healthTask?.cancel(false)
         healthTask = null
+        lastRxBytes = -1L
+        lastTxBytes = -1L
         try {
             context.applicationContext.getSystemService(ConnectivityManager::class.java)
                 ?.unregisterNetworkCallback(cb)
@@ -117,11 +127,18 @@ object ReconnectMonitor {
     /** Health tetap diperbarui walau Activity ditutup; state UP saja bukan bukti internet. */
     private fun refreshLinkHealth(app: Context) {
         val stats = VelumTunnel.traffic(app)
+        val trafficActive = stats != null && lastRxBytes >= 0L && lastTxBytes >= 0L &&
+            (stats.rxBytes != lastRxBytes || stats.txBytes != lastTxBytes)
+        if (stats != null) {
+            lastRxBytes = stats.rxBytes
+            lastTxBytes = stats.txBytes
+        }
         val health = VelumLinkHealthDecision.decide(
             tunnelUp = VelumTunnel.state == Tunnel.State.UP,
             statisticsReadable = stats != null,
             latestHandshakeEpochMs = stats?.latestHandshakeMs ?: 0L,
-            nowEpochMs = System.currentTimeMillis()
+            nowEpochMs = System.currentTimeMillis(),
+            trafficActive = trafficActive
         )
         VelumLinkHealthStore.update(health)
         if (VelumTunnel.state == Tunnel.State.UP) StatusNotifier.show(app)

@@ -622,17 +622,20 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
                 return@runStats
             }
             val nowMs = SystemClock.elapsedRealtime()
+            val trafficActive = lastRxBytes >= 0L && lastTxBytes >= 0L &&
+                (t.rxBytes != lastRxBytes || t.txBytes != lastTxBytes)
             val health = VelumLinkHealthDecision.decide(
                 tunnelUp = true,
                 statisticsReadable = true,
                 latestHandshakeEpochMs = t.latestHandshakeMs,
-                nowEpochMs = System.currentTimeMillis()
+                nowEpochMs = System.currentTimeMillis(),
+                trafficActive = trafficActive
             )
             VelumLinkHealthStore.update(health)
             renderHealth(health)
             val rates = rate.add(t.rxBytes, t.txBytes, nowMs)
             setTextIfChanged(infoData, renderData(rates, t.rxBytes, t.txBytes))
-            if (t.rxBytes != lastRxBytes || t.txBytes != lastTxBytes) {
+            if (trafficActive) {
                 lastRxBytes = t.rxBytes
                 lastTxBytes = t.txBytes
                 lastTrafficMs = nowMs
