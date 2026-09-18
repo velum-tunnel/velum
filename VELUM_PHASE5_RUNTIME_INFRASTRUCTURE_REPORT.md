@@ -188,6 +188,10 @@ No private key, registration token, credential, keystore, authorization header, 
 
 A real device or approved remote device-farm connection is a prerequisite for the mandatory runtime matrix. GitHub-hosted runners must not be treated as physical-device infrastructure. A future self-hosted runner/device-farm workflow must provision ADB securely, fail if no device is present, redact artifacts, and retain logcat/dumpsys evidence without secrets.
 
+## CI
+
+The Phase 5 build workflow completed successfully: [run 35340072131](https://github.com/velum-tunnel/velum/actions/runs/35340072131), including unit tests, debug build, preview/R8, lint, release signing/verification, and artifact upload. The documentation workflow also completed successfully: run `35340072187`.
+
 ## Final Status
 
 **AUTOMATED QUALITY: PASS**
