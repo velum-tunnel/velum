@@ -1,0 +1,78 @@
+name: Android Emulator Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  android-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        api-level: [30]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Enable KVM (no-op check, GitHub-hosted runners never have it)
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo "KVM tersedia (tidak biasa di hosted runner)."
+          else
+            echo "KVM tidak tersedia — akan pakai software rendering (swiftshader_indirect)."
+          fi
+
+      - name: Cache AVD
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ matrix.api-level }}
+
+      - name: Create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching."
+
+      - name: Run tests on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            adb devices
+            adb wait-for-device
+            # Ganti baris di bawah dengan perintah build/test project kamu, contoh:
+            # ./gradlew connectedCheck
+            echo "Emulator siap dan device terdeteksi oleh ADB."
+
+      - name: Upload emulator logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-logs
+          path: |
+            /tmp/emulator*.log
+            ~/.android/avd/**/*.log
+          if-no-files-found: ignore
