@@ -119,7 +119,7 @@ No suspected application behavior was promoted to a bug. Successful compilation,
 
 ## 11. CI
 
-The Phase 4 branch contains only this report at this stage and was not yet pushed when this report was written. CI must be triggered after the branch push; no Phase 4 CI PASS is claimed in this document before that workflow completes.
+The Phase 4 branch contains only this report and the build workflow was manually dispatched because the report-only change is ignored by the build path filter. The branch-specific build workflow completed successfully: [run 35339130804](https://github.com/velum-tunnel/velum/actions/runs/35339130804). The documentation workflow also completed successfully: run `35339116636`.
 
 ## 12. Git
 
