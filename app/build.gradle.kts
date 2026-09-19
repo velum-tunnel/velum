@@ -74,6 +74,15 @@ android {
         }
     }
 
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
+        }
+    }
+
     // Laporan teks dibutuhkan CI: laporan HTML tidak bisa dibaca dari log,
     // dan artifact tidak bisa diunduh dari sandbox agen (lihat AGENTS.md §5).
     // Hanya bahasa Indonesia; resource bahasa lain dari library dibuang agar APK
