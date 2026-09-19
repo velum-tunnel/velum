@@ -13,6 +13,7 @@ captures/
 # Rahasia
 *.jks
 *.keystore
+!debug.keystore
 *.pem
 .env
 # OS

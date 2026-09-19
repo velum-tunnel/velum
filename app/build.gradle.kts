@@ -22,7 +22,31 @@ android {
 
     signingConfigs {
         create("debugConfig") {
-            storeFile = file("${rootDir}/debug.keystore")
+            val rootKeystore = file("${rootDir}/debug.keystore")
+            val defaultKeystore = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            val targetKeystore = if (rootKeystore.exists()) rootKeystore else defaultKeystore
+
+            if (!targetKeystore.exists()) {
+                targetKeystore.parentFile?.mkdirs()
+                try {
+                    val keytoolBin = org.gradle.internal.jvm.Jvm.current().getExecutable("keytool")
+                    val cmd = if (keytoolBin.exists()) keytoolBin.absolutePath else "keytool"
+                    ProcessBuilder(
+                        cmd,
+                        "-genkeypair",
+                        "-keystore", targetKeystore.absolutePath,
+                        "-storepass", "android",
+                        "-alias", "androiddebugkey",
+                        "-keypass", "android",
+                        "-dname", "CN=Android Debug,O=Android,C=US",
+                        "-keyalg", "RSA",
+                        "-keysize", "2048",
+                        "-validity", "10000"
+                    ).inheritIO().start().waitFor()
+                } catch (_: Exception) {}
+            }
+
+            storeFile = targetKeystore
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
