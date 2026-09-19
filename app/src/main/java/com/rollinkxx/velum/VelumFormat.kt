@@ -1,5 +1,7 @@
 package com.rollinkxx.velum
 
+import java.net.Inet6Address
+import java.net.InetAddress
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -21,9 +23,9 @@ object VelumFormat {
         var ip = ""
         for (line in text.lineSequence()) {
             when {
-                line.startsWith("warp=") -> warp = line.removePrefix("warp=")
-                line.startsWith("colo=") -> colo = line.removePrefix("colo=")
-                line.startsWith("ip=") -> ip = line.removePrefix("ip=")
+                line.startsWith("warp=") -> warp = line.removePrefix("warp=").trim()
+                line.startsWith("colo=") -> colo = line.removePrefix("colo=").trim()
+                line.startsWith("ip=") -> ip = line.removePrefix("ip=").trim()
             }
         }
         return TraceInfo(warp, colo, ip)
@@ -112,8 +114,12 @@ object VelumFormat {
      * persis kelas masalah yang dulu membuat "Kesalahan jaringan: Unable to resolve host"
      * menyesatkan pengguna.
      */
-    fun isUsable(trace: TraceInfo): Boolean =
-        trace.warp.isNotEmpty() || trace.colo.isNotEmpty() || trace.ip.isNotEmpty()
+    fun isUsable(trace: TraceInfo): Boolean {
+        val validWarp = trace.warp in setOf("on", "plus", "off")
+        val validColo = trace.colo.matches(Regex("[A-Z0-9]{3}"))
+        val validIp = isIpv4(trace.ip) || isIpv6(trace.ip)
+        return validWarp || validColo || validIp
+    }
 
     /** Memisahkan host dari "host:port" (aman untuk literal IPv6 dalam kurung siku). */
     fun hostPart(endpoint: String): String {
@@ -123,9 +129,7 @@ object VelumFormat {
 
     /** Apakah [host] literal IPv4 atau IPv6 (bukan nama domain). */
     fun isIpLiteral(host: String): Boolean {
-        val isV4 = host.all { it.isDigit() || it == '.' } && host.count { it == '.' } == 3
-        val isV6 = host.contains(":") && host.count { it == ':' } > 1
-        return isV4 || isV6
+        return isIpv4(host) || isIpv6(host)
     }
 
     /**
@@ -141,6 +145,56 @@ object VelumFormat {
         }
     }
 
+    /** Literal IPv6 sah tanpa nama zona (`%wlan0`) atau kurung siku. */
+    fun isIpv6(s: String): Boolean {
+        if (s.isEmpty() || ':' !in s || '%' in s || '[' in s || ']' in s) return false
+        return try {
+            InetAddress.getByName(s) is Inet6Address
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Menormalkan endpoint dengan validator host dan port yang sama untuk semua sumber.
+     * Bila [defaultPort] null, port eksplisit wajib ada. IPv6 telanjang hanya diterima
+     * ketika port default tersedia karena selain itu pemisah port ambigu.
+     */
+    fun normalizeEndpoint(raw: String?, defaultPort: Int?): String? {
+        val s = raw?.trim().orEmpty()
+        if (s.isEmpty()) return null
+        if (s.startsWith("[")) {
+            val end = s.indexOf(']')
+            if (end <= 1) return null
+            val host = s.substring(1, end)
+            if (!isIpv6(host)) return null
+            val suffix = s.substring(end + 1)
+            val port = when {
+                suffix.isEmpty() -> defaultPort?.toString() ?: return null
+                suffix.startsWith(":") && suffix.length > 1 && ':' !in suffix.drop(1) -> suffix.drop(1)
+                else -> return null
+            }
+            return if (isValidPort(port)) "[$host]:$port" else null
+        }
+
+        val colonCount = s.count { it == ':' }
+        if (colonCount > 1) {
+            val port = defaultPort ?: return null
+            return if (isIpv6(s)) "[$s]:$port" else null
+        }
+        val host: String
+        val port: String
+        if (colonCount == 1) {
+            host = s.substringBeforeLast(':')
+            port = s.substringAfterLast(':')
+        } else {
+            host = s
+            port = defaultPort?.toString() ?: return null
+        }
+        if (!isValidHost(host) || !isValidPort(port)) return null
+        return "$host:$port"
+    }
+
     /**
      * Menormalkan masukan endpoint manual pengguna menjadi `host:port` yang bisa dipakai
      * WireGuard, atau `null` bila tidak sah. Diterima: IPv4, nama domain, atau IPv6
@@ -148,36 +202,18 @@ object VelumFormat {
      * karena ambigu terhadap pemisah port — sejalan dengan `Peer.Builder.parseEndpoint`.
      */
     fun normalizeManualEndpoint(raw: String?): String? {
-        val s = raw?.trim().orEmpty()
-        if (s.isEmpty()) return null
-        if (s.startsWith("[")) {
-            val end = s.indexOf("]:").takeIf { it > 0 } ?: return null
-            val host = s.substring(1, end)
-            val port = s.substring(end + 2)
-            val v6Sah = host.count { it == ':' } >= 2 &&
-                host.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' || it == ':' }
-            return if (v6Sah && isValidPort(port)) "[$host]:$port" else null
-        }
-        val idx = s.lastIndexOf(':')
-        if (idx <= 0 || idx == s.length - 1) return null
-        val host = s.substring(0, idx)
-        val port = s.substring(idx + 1)
-        if (host.contains(':')) return null // IPv6 telanjang: wajib dibungkus [..]
-        // Host yang isinya hanya angka dan titik adalah IP yang hendak ditulis pengguna
-        // — wajib lolos uji IPv4 ketat. Bila tidak, ia justru DITERIMA sebagai nama
-        // domain digit (mis. "999.1.1.1" sah sebagai label DNS) dan salah ketiknya baru
-        // terlihat belakangan sebagai kegagalan DNS — kabar buruk yang ditunda. Contoh
-        // yang ditolak di sini: "999.1.1.1", "01.2.3.4", atau satu angka telanjang.
-        val tampakIp = host.all { it.isDigit() || it == '.' }
-        if (tampakIp) {
-            if (!isIpv4(host)) return null
-        } else if (!isDomainName(host)) return null
-        return if (isValidPort(port)) "$host:$port" else null
+        return normalizeEndpoint(raw, defaultPort = null)
     }
 
     /** Port 1–65535 (angka digit murni). */
     private fun isValidPort(p: String): Boolean =
         p.isNotEmpty() && p.length <= 5 && p.all(Char::isDigit) && p.toInt() in 1..65535
+
+    private fun isValidHost(host: String): Boolean {
+        if (host.isEmpty()) return false
+        val tampakIp = host.all { it.isDigit() || it == '.' }
+        return if (tampakIp) isIpv4(host) else isDomainName(host)
+    }
 
     /** Nama domain yang layak jadi host endpoint (label non-kosong, karakter wajar). */
     private fun isDomainName(s: String): Boolean {

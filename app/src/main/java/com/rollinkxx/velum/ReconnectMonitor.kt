@@ -7,7 +7,9 @@ import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.SystemClock
 import com.wireguard.android.backend.Tunnel
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -33,7 +35,19 @@ object ReconnectMonitor {
      */
     private val BACKOFF_MS = longArrayOf(2000, 5000, 10000, 30000, 60000)
 
-    private val worker = Executors.newSingleThreadExecutor()
+    @Volatile
+    private var recoveryWorker: ExecutorService? = null
+
+    @Synchronized
+    private fun worker(): ExecutorService = recoveryWorker?.takeUnless { it.isShutdown }
+        ?: Executors.newSingleThreadExecutor().also { recoveryWorker = it }
+
+    private fun submit(block: () -> Unit): Boolean = try {
+        worker().execute(block)
+        true
+    } catch (_: RejectedExecutionException) {
+        false
+    }
 
     @Volatile
     private var callback: ConnectivityManager.NetworkCallback? = null
@@ -89,14 +103,19 @@ object ReconnectMonitor {
     /** Berhenti memantau; aman dipanggil berulang. Panggil saat putus manual. */
     @Synchronized
     fun stop(context: Context) {
-        val cb = callback ?: return
+        val cb = callback
         callback = null
-        try {
-            context.applicationContext.getSystemService(ConnectivityManager::class.java)
-                ?.unregisterNetworkCallback(cb)
-        } catch (e: Exception) {
-            VelumLog.w(TAG, "gagal melepas network callback", e)
+        if (cb != null) {
+            try {
+                context.applicationContext.getSystemService(ConnectivityManager::class.java)
+                    ?.unregisterNetworkCallback(cb)
+            } catch (e: Exception) {
+                VelumLog.w(TAG, "gagal melepas network callback", e)
+            }
         }
+        recoveryWorker?.shutdownNow()
+        recoveryWorker = null
+        bouncing.release()
     }
 
     /**
@@ -123,13 +142,13 @@ object ReconnectMonitor {
         if (!bouncing.tryClaim()) return
         lastBounceMs = SystemClock.elapsedRealtime()
         val gen = VelumTunnel.currentIntent
-        worker.execute {
+        if (!submit recovery@{
             try {
                 val prefs = try {
                     Prefs.of(app)
                 } catch (e: KeystoreUnavailableException) {
                     VelumLog.w(TAG, "recovery dibatalkan: penyimpanan aman tidak tersedia", e)
-                    return@execute
+                    return@recovery
                 }
                 VelumTunnel.refreshState(app)
                 val should = VelumRecoveryDecision.shouldSchedule(
@@ -140,7 +159,7 @@ object ReconnectMonitor {
                     bouncing = false,
                     intentStale = VelumTunnel.intentStale(gen)
                 )
-                if (!should) return@execute
+                if (!should) return@recovery
                 if (VelumTunnel.state != Tunnel.State.UP) {
                     tryUpOnce(app, prefs, gen)
                 } else if (trigger == VelumRecoveryDecision.Trigger.NETWORK) {
@@ -151,7 +170,7 @@ object ReconnectMonitor {
             } finally {
                 bouncing.release()
             }
-        }
+        }) bouncing.release()
     }
 
     private fun fromOwnTunnel(app: Context, network: Network): Boolean = try {
@@ -177,7 +196,7 @@ object ReconnectMonitor {
         // Tanpa ini, pantulan yang sedang berjalan bisa menyalakan tunnel tepat setelah
         // pengguna memutusnya lewat ubin.
         val gen = VelumTunnel.currentIntent
-        worker.execute {
+        if (!submit bounce@{
             try {
                 // Tanpa keystore tidak ada niat sah yang bisa dibaca; jangan bertindak
                 // otomatis dalam keadaan itu.
@@ -185,23 +204,23 @@ object ReconnectMonitor {
                     Prefs.of(app)
                 } catch (e: KeystoreUnavailableException) {
                     VelumLog.w(TAG, "pantulan dibatalkan: penyimpanan aman tidak tersedia", e)
-                    return@execute
+                    return@bounce
                 }
-                if (!prefs.wasUp || !prefs.isRegistered) return@execute
+                if (!prefs.wasUp || !prefs.isRegistered) return@bounce
                 if (VelumTunnel.intentStale(gen)) {
                     VelumLog.i(TAG, "pantulan jaringan dibatalkan: ada niat pengguna yang lebih baru")
-                    return@execute
+                    return@bounce
                 }
                 if (VelumTunnel.state != Tunnel.State.UP) {
                     tryUpOnce(app, prefs, gen)
-                    return@execute
+                    return@bounce
                 }
                 VelumLog.i(TAG, "jaringan $reason: memantul tunnel")
                 bounceWithBackoff(app, prefs, gen)
             } finally {
                 bouncing.release()
             }
-        }
+        }) bouncing.release()
     }
 
     /**

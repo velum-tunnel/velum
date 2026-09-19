@@ -9,6 +9,7 @@ import com.wireguard.config.Config
 import com.wireguard.config.Interface
 import com.wireguard.config.Peer
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Pengelola tunnel WARP berbasis WireGuard (GoBackend).
@@ -64,9 +65,20 @@ object VelumTunnel : Tunnel {
     var upSinceElapsedMs: Long = 0L
         private set
 
-    /** Callback UI; dipanggil dari thread backend, penerima harus pindah ke main thread sendiri. */
-    @Volatile
-    var listener: ((Tunnel.State) -> Unit)? = null
+    /** Callback UI tunggal dengan compare-and-clear agar Activity lama tidak melepas pemilik baru. */
+    private val listener = AtomicReference<((Tunnel.State) -> Unit)?>(null)
+
+    fun setListener(callback: (Tunnel.State) -> Unit) {
+        listener.set(callback)
+    }
+
+    fun clearListenerIf(callback: (Tunnel.State) -> Unit) {
+        listener.compareAndSet(callback, null)
+    }
+
+    /** DOWN yang diminta aplikasi tidak boleh dianggap pencabutan eksternal oleh Settings. */
+    private val expectedDownTransitions = AtomicInteger(0)
+    private val stateLock = Any()
 
     /**
      * Generasi niat pengguna, milik **proses** — bukan milik satu layar atau satu pelaku.
@@ -126,20 +138,51 @@ object VelumTunnel : Tunnel {
     override fun getName(): String = NAME
 
     override fun onStateChange(newState: Tunnel.State) {
-        state = newState
-        if (newState == Tunnel.State.UP) {
-            // Hanya diisi bila belum terisi: pantulan down->up yang cepat tidak boleh
-            // mereset durasi yang sudah berjalan.
-            if (upSinceElapsedMs == 0L) upSinceElapsedMs = SystemClock.elapsedRealtime()
-        } else {
-            upSinceElapsedMs = 0L
+        val previous: Tunnel.State
+        val callback: ((Tunnel.State) -> Unit)?
+        synchronized(stateLock) {
+            previous = state
+            state = newState
+            if (newState == Tunnel.State.UP) {
+                // Hanya diisi bila belum terisi: pantulan down->up yang cepat tidak boleh
+                // mereset durasi yang sudah berjalan.
+                if (upSinceElapsedMs == 0L) upSinceElapsedMs = SystemClock.elapsedRealtime()
+            } else {
+                upSinceElapsedMs = 0L
+            }
+            callback = listener.get()
         }
         updateNotification(newState)
-        listener?.invoke(newState)
+        callback?.invoke(newState)
         if (newState == Tunnel.State.DOWN) {
-            // Putus manual sudah lebih dulu menulis wasUp=false dan menaikkan generasi niat;
-            // recovery otomatis karena state DOWN akan langsung batal pada guard yang sama.
-            appContext?.let { ReconnectMonitor.recoverIfNeeded(it, VelumRecoveryDecision.Trigger.TUNNEL_DOWN) }
+            val expected = consumeExpectedDown()
+            appContext?.let { ctx ->
+                if (!expected && previous == Tunnel.State.UP) {
+                    // GoBackend tidak menjatuhkan interface hanya karena jaringan putus;
+                    // DOWN tak diminta saat sebelumnya UP berarti VpnService dihentikan dari
+                    // sistem/Settings. Hormati tindakan itu dan batalkan niat pemulihan.
+                    runCatching { cancelIntent(Prefs.of(ctx)) }
+                    ReconnectMonitor.stop(ctx)
+                } else {
+                    ReconnectMonitor.recoverIfNeeded(ctx, VelumRecoveryDecision.Trigger.TUNNEL_DOWN)
+                }
+            }
+        }
+    }
+
+    private fun expectDown() {
+        expectedDownTransitions.incrementAndGet()
+    }
+
+    private fun cancelExpectedDown() {
+        expectedDownTransitions.updateAndGet { (it - 1).coerceAtLeast(0) }
+    }
+
+    private fun consumeExpectedDown(): Boolean {
+        while (true) {
+            val current = expectedDownTransitions.get()
+            if (current <= 0) return false
+            if (expectedDownTransitions.compareAndSet(current, current - 1)) return true
         }
     }
 
@@ -193,7 +236,13 @@ object VelumTunnel : Tunnel {
     @Synchronized
     @Throws(Exception::class)
     fun down(context: Context) {
-        backend(context).setState(this, Tunnel.State.DOWN, null)
+        expectDown()
+        try {
+            backend(context).setState(this, Tunnel.State.DOWN, null)
+        } catch (e: Exception) {
+            cancelExpectedDown()
+            throw e
+        }
     }
 
     /**
@@ -211,7 +260,13 @@ object VelumTunnel : Tunnel {
     @Throws(Exception::class)
     fun restart(context: Context, prefs: Prefs, shouldContinue: () -> Boolean = { prefs.wasUp }) {
         val b = backend(context)
-        b.setState(this, Tunnel.State.DOWN, null)
+        expectDown()
+        try {
+            b.setState(this, Tunnel.State.DOWN, null)
+        } catch (e: Exception) {
+            cancelExpectedDown()
+            throw e
+        }
         if (!shouldContinue()) return // intent baru membatalkan sebelum tunnel dihidupkan lagi
         b.setState(this, Tunnel.State.UP, buildConfig(prefs))
     }

@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.io.File
+import java.io.IOException
 
 /**
  * Penyimpanan data registrasi. **Hanya** terenkripsi (AndroidX Security + Tink);
@@ -18,6 +19,10 @@ import java.io.File
  */
 class Prefs(context: Context) {
     private val sp: SharedPreferences = open(context.applicationContext)
+
+    /** Kandidat endpoint hanya untuk satu verifikasi handshake; tidak pernah dipersist. */
+    @Volatile
+    internal var pendingEndpoint: String? = null
 
     var privateKey: String?
         get() = sp.getString(K_PRIV, null)
@@ -101,7 +106,7 @@ class Prefs(context: Context) {
      * nilai yang dipilih langsung oleh pengguna.
      */
     val effectiveEndpoint: String?
-        get() = manualEndpoint ?: workingEndpoint ?: speedEndpoint ?: endpoint
+        get() = manualEndpoint ?: pendingEndpoint ?: workingEndpoint ?: speedEndpoint ?: endpoint
 
     /** Paket aplikasi yang dikecualikan dari tunnel (split tunneling). */
     var excludedApps: Set<String>
@@ -147,7 +152,9 @@ class Prefs(context: Context) {
      */
     @SuppressLint("ApplySharedPref")
     fun writeBootRecordDurable(value: String) {
-        sp.edit().putString(K_BOOT, value).commit()
+        if (!sp.edit().putString(K_BOOT, value).commit()) {
+            throw IOException("rekaman boot tidak dapat disimpan")
+        }
     }
 
     /**
@@ -183,8 +190,9 @@ class Prefs(context: Context) {
      * proses yang mati — seluruh bidang masuk, atau tidak sama sekali.
      */
     @SuppressLint("ApplySharedPref")
+    @Throws(IOException::class)
     fun saveRegistration(r: VelumRegistration.Result, privateKeyBase64: String) {
-        sp.edit()
+        val committed = sp.edit()
             .putString(K_PRIV, privateKeyBase64)
             .putString(K_ID, r.id)
             .putString(K_TOKEN, r.token)
@@ -196,6 +204,11 @@ class Prefs(context: Context) {
             .putString(K_ENDPOINT, r.endpoint)
             .putBoolean(K_WARP, true) // body registrasi memang meminta warp_enabled
             .commit()
+        if (!committed || privateKey != privateKeyBase64 || deviceId != r.id || token != r.token ||
+            addressV4 != r.addressV4 || peerPublicKey != r.peerPublicKey || endpoint != r.endpoint
+        ) {
+            throw IOException("registrasi tidak dapat disimpan")
+        }
     }
 
     /**
@@ -222,6 +235,7 @@ class Prefs(context: Context) {
      * padahal pengguna pernah dengan sengaja mematikannya.
      */
     @SuppressLint("ApplySharedPref")
+    @Throws(IOException::class)
     fun clear() {
         val keepUp = wasUp
         val keepExcluded = excludedApps
@@ -232,7 +246,7 @@ class Prefs(context: Context) {
         if (keepExcluded.isNotEmpty()) ed.putStringSet(K_EXCLUDED, keepExcluded)
         if (keepBoot != null) ed.putString(K_BOOT, keepBoot)
         if (keepManual != null) ed.putString(K_MANUAL_EP, keepManual)
-        ed.commit()
+        if (!ed.commit()) throw IOException("penyimpanan lokal tidak dapat dibersihkan")
     }
 
     companion object {
@@ -277,35 +291,17 @@ class Prefs(context: Context) {
         const val K_DOH_EP = "doh_ep"
         const val K_DOH_AT = "doh_at"
 
-        /**
-         * Membuka penyimpanan terenkripsi, hanya itu.
-         *
-         * Kegagalan pertama dicoba pulihkan SEKALI: penyebab tersering adalah berkas
-         * prefs terenkripsi yang rusak (mis. penulisan yang terputus di tengah), yang
-         * membuat `create()` gagal SELAMANYA sehingga aplikasi tidak bisa menyimpan apa
-         * pun. Berkas yang sudah terbukti tidak terbaca untuk kunci ini tidak menyimpan
-         * apa pun yang masih bisa diselamatkan, jadi ia dikosongkan lalu pembukaan
-         * diulang — data registrasinya memang hilang, tetapi aplikasi bisa mendaftar
-         * ulang (persis konsekuensi yang dipilih untuk perangkat era fallback polos:
-         * daftar ulang SEKALI).
-         *
-         * Kegagalan kedua berarti keystore-nya yang bermasalah. Di sini SENGAJA tidak
-         * ada fallback ke berkas polos (kunci privat tidak boleh tersimpan tanpa
-         * enkripsi, berapa pun harganya): lempar [KeystoreUnavailableException] dan
-         * biarkan pemanggil menjelaskannya ke pengguna.
-         */
+        /** Membuka storage tanpa pernah menghapus data pada exception yang belum terklasifikasi. */
         @Throws(KeystoreUnavailableException::class)
         private fun open(ctx: Context): SharedPreferences {
             try {
-                return openEncrypted(ctx).also { migrateLegacy(ctx, it) }
+                val encrypted = openEncrypted(ctx)
+                migrateLegacy(ctx, encrypted)
+                return encrypted
             } catch (e: Exception) {
-                VelumLog.w(TAG, "prefs terenkripsi gagal dibuka; berkas dikosongkan lalu dicoba ulang", e)
-                deleteEncryptedFile(ctx)
-                return try {
-                    openEncrypted(ctx).also { migrateLegacy(ctx, it) }
-                } catch (kedua: Exception) {
-                    throw KeystoreUnavailableException(kedua)
-                }
+                // Jangan mengubah exception sementara/permission/race menjadi kehilangan
+                // kredensial. Reset korupsi harus merupakan tindakan pengguna eksplisit.
+                throw KeystoreUnavailableException(e)
             }
         }
 
@@ -320,15 +316,6 @@ class Prefs(context: Context) {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-        }
-
-        /** Menghapus berkas terenkripsi yang sudah terbukti tidak bisa dibuka. */
-        private fun deleteEncryptedFile(ctx: Context) {
-            try {
-                File(File(ctx.applicationInfo.dataDir, "shared_prefs"), "$FILE.xml").delete()
-            } catch (e: Exception) {
-                VelumLog.w(TAG, "gagal mengosongkan berkas prefs rusak", e)
-            }
         }
 
         /** Keberadaan berkas era lama, tanpa membuka/dekripsi isinya. */
@@ -348,7 +335,6 @@ class Prefs(context: Context) {
             // Cek murah dulu: bila berkas era lama tak pernah ada, tak ada yang dimigrasi
             // dan kita terhindar dari pembacaan + dekripsi seluruh nilai (`dst.all`).
             if (!legacyFileExists(ctx)) return
-            if (dst.all.isNotEmpty()) return
             val legacy = ctx.getSharedPreferences(LEGACY_FILE, Context.MODE_PRIVATE)
             val rencana = VelumMigration.plan(legacy.all)
             if (rencana.isEmpty()) return
@@ -367,11 +353,21 @@ class Prefs(context: Context) {
                         }
                     }
                 }
-                if (!ed.commit()) return
-                legacy.edit().clear().commit()
-                VelumLog.i(TAG, "migrasi prefs lama selesai")
+                if (!ed.commit()) throw IOException("tujuan migrasi tidak dapat disimpan")
+
+                // Hapus hanya key yang benar-benar dipindah. Tipe/key tak dikenal tetap
+                // berada di source agar downgrade/versi masa depan tidak kehilangan data.
+                val sourceEdit = legacy.edit()
+                rencana.keys.forEach(sourceEdit::remove)
+                if (!sourceEdit.commit()) throw IOException("source migrasi tidak dapat dibersihkan")
+                if (rencana.keys.any { legacy.contains(it) }) {
+                    throw IOException("source migrasi masih memuat key yang dipindah")
+                }
+                VelumLog.i(TAG, "migrasi prefs lama selesai (${rencana.size} key)")
             } catch (e: Exception) {
-                VelumLog.w(TAG, "migrasi prefs lama gagal", e)
+                // Destination sudah aman bila commit pertama berhasil, tetapi source
+                // plaintext harus dicoba lagi pada startup berikutnya sampai bersih.
+                throw IOException("migrasi prefs lama belum selesai", e)
             }
         }
     }

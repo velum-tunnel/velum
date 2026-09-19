@@ -61,21 +61,8 @@ object VelumRegistration {
     fun normalizeEndpoint(host: String?): String {
         val trimmed = host?.trim().orEmpty()
         if (trimmed.isEmpty()) return VelumUpstream.DEFAULT_ENDPOINT
-        val isV6 = trimmed.contains(":") && trimmed.count { it == ':' } > 1
-        val sudahBerport = if (trimmed.startsWith("[")) {
-            trimmed.contains("]:")
-        } else {
-            trimmed.count { it == ':' } == 1 && !isV6
-        }
-        if (sudahBerport) return trimmed
-        val hostPart = if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-            trimmed
-        } else if (isV6) {
-            "[$trimmed]"
-        } else {
-            trimmed
-        }
-        return "$hostPart:$WG_PORT"
+        return VelumFormat.normalizeEndpoint(trimmed, WG_PORT)
+            ?: throw BadResponse("endpoint registrasi tidak sah")
     }
 
     private fun JSONObject.wajib(key: String): String {

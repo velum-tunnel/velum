@@ -81,13 +81,15 @@ object VelumApi {
         when (enabled) {
             true -> prefs.warpEnabled = true
             false -> {
+                // Daftar baru dahulu dan simpan secara atomik. Kredensial lama tidak boleh
+                // dihapus sebelum penggantinya tervalidasi serta durabel; DELETE lama hanya
+                // cleanup best-effort setelah transaksi baru berhasil.
+                register(prefs)
                 try {
                     request("DELETE", "$BASE/reg/$id", null, token)
                 } catch (_: IOException) {
-                    // Server mungkin sudah lupa; tetap daftar ulang.
+                    // Registrasi baru sudah aktif; akun lama dapat dibersihkan kemudian.
                 }
-                prefs.clear()
-                register(prefs) // IOException dibiarkan ke pemanggil; prefs set ulang di sana
             }
             null -> Unit // tak meyakinkan: jangan sentuh apa pun
         }
@@ -125,32 +127,36 @@ object VelumApi {
         val started = SystemClock.elapsedRealtime()
         var lastError: IOException? = null
         for (url in TRACE_URLS) {
+            val remaining = TRACE_BUDGET_MS - (SystemClock.elapsedRealtime() - started)
+            if (remaining <= 0L) break
             try {
-                return fetchTraceFrom(url)
+                return fetchTraceFrom(url, remaining)
             } catch (e: IOException) {
                 lastError = e
                 // Gagal cepat (mis. host diblokir DNS) → masih ada waktu untuk cadangan.
                 // Gagal karena menggantung sampai batas waktu → cadangan hanya menambah
                 // waktu tunggu, jadi dihentikan saja.
-                if (SystemClock.elapsedRealtime() - started > TRACE_BUDGET_MS) break
+                if (SystemClock.elapsedRealtime() - started >= TRACE_BUDGET_MS) break
             }
         }
         throw lastError ?: IOException("uji trace gagal")
     }
 
     @Throws(IOException::class)
-    private fun fetchTraceFrom(url: String): VelumFormat.TraceInfo {
+    private fun fetchTraceFrom(url: String, remainingMs: Long): VelumFormat.TraceInfo {
         val conn = (URL(url).openConnection() as HttpURLConnection)
         try {
-            conn.connectTimeout = 4000
-            conn.readTimeout = 4000
+            val perStageTimeout = VelumIo.timeoutPerStage(remainingMs, TRACE_TIMEOUT_MS)
+            if (perStageTimeout <= 0) throw IOException("anggaran uji trace habis")
+            conn.connectTimeout = perStageTimeout
+            conn.readTimeout = perStageTimeout
             conn.setRequestProperty("User-Agent", USER_AGENT)
             // Soket baru untuk setiap uji: jangan pakai koneksi dari sebelum tunnel aktif.
             conn.setRequestProperty("Connection", "close")
             conn.useCaches = false
             val code = conn.responseCode
             if (code !in 200..299) throw IOException("HTTP $code")
-            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val text = conn.inputStream.use { VelumIo.readUtf8Bounded(it, TRACE_MAX_BYTES) }
             val trace = VelumFormat.parseTrace(text)
             // HTTP 200 belum berarti isinya trace: portal tawanan menjawab 200 dengan HTML.
             // Dibiarkan, hasilnya "Belum aktif" — menuduh tunnel padahal jaringan yang
@@ -185,12 +191,12 @@ object VelumApi {
             }
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            val text = stream?.use { VelumIo.readUtf8Bounded(it, API_MAX_BYTES) } ?: ""
             if (code !in 200..299) {
                 throw if (VelumUpstream.isClientRejected(code)) {
-                    HttpError(code, "HTTP $code: ${text.take(120)}")
+                    HttpError(code, "HTTP $code")
                 } else {
-                    IOException("HTTP $code: ${text.take(120)}")
+                    IOException("HTTP $code")
                 }
             }
             return text
@@ -204,4 +210,8 @@ object VelumApi {
         fmt.timeZone = TimeZone.getTimeZone("UTC")
         return fmt.format(Date())
     }
+
+    private const val TRACE_TIMEOUT_MS = 4_000
+    private const val TRACE_MAX_BYTES = 64 * 1024
+    private const val API_MAX_BYTES = 256 * 1024
 }

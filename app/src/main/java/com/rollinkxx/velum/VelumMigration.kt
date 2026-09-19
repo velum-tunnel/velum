@@ -23,8 +23,9 @@ object VelumMigration {
                 is Long -> hasil[kunci] = nilai
                 is Float -> hasil[kunci] = nilai
                 is Set<*> -> {
-                    @Suppress("UNCHECKED_CAST")
-                    hasil[kunci] = nilai as Set<String>
+                    if (nilai.all { it is String }) {
+                        hasil[kunci] = nilai.filterIsInstance<String>().toSet()
+                    }
                 }
                 else -> Unit // tipe tak dikenal: lewati, jangan ditulis sembarangan
             }

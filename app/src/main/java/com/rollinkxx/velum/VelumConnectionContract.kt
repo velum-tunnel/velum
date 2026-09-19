@@ -20,9 +20,10 @@ object VelumConnectionContract {
         cancelled: () -> Boolean = { false }
     ): Boolean {
         if (cancelled()) return false
+        val baseline = VelumTunnel.traffic(context)?.latestHandshakeMs ?: 0L
         VelumTunnel.up(context, prefs)
-        val valid = verify(context, maxWaitMs, cancelled)
-        if (!valid && !cancelled()) runCatching { VelumTunnel.down(context) }
+        val valid = verify(context, maxWaitMs, baseline, cancelled)
+        cleanupIfStillOwned(context, valid, cancelled)
         return valid
     }
 
@@ -34,9 +35,10 @@ object VelumConnectionContract {
         cancelled: () -> Boolean = { false }
     ): Boolean {
         if (cancelled()) return false
+        val baseline = VelumTunnel.traffic(context)?.latestHandshakeMs ?: 0L
         VelumTunnel.restart(context, prefs, shouldContinue = { !cancelled() })
-        val valid = verify(context, maxWaitMs, cancelled)
-        if (!valid && !cancelled()) runCatching { VelumTunnel.down(context) }
+        val valid = verify(context, maxWaitMs, baseline, cancelled)
+        cleanupIfStillOwned(context, valid, cancelled)
         return valid
     }
 
@@ -44,9 +46,10 @@ object VelumConnectionContract {
     fun verify(
         context: Context,
         maxWaitMs: Long,
+        baselineHandshakeMs: Long = 0L,
         cancelled: () -> Boolean = { false }
     ): Boolean {
-        val handshake = awaitHandshake(context, maxWaitMs, cancelled)
+        val handshake = awaitHandshake(context, maxWaitMs, baselineHandshakeMs, cancelled)
         return accepted(
             tunnelUp = VelumTunnel.state == Tunnel.State.UP,
             handshakeReady = handshake,
@@ -58,13 +61,18 @@ object VelumConnectionContract {
     fun awaitHandshake(
         context: Context,
         maxWaitMs: Long,
+        baselineHandshakeMs: Long = 0L,
         cancelled: () -> Boolean = { false }
     ): Boolean {
         val deadline = SystemClock.elapsedRealtime() + maxWaitMs
         while (SystemClock.elapsedRealtime() < deadline) {
             if (cancelled()) return false
             if (VelumTunnel.state != Tunnel.State.UP) return false
-            if ((VelumTunnel.traffic(context)?.latestHandshakeMs ?: 0L) > 0L) return true
+            if (isFreshHandshake(
+                    VelumTunnel.traffic(context)?.latestHandshakeMs ?: 0L,
+                    baselineHandshakeMs
+                )
+            ) return true
             try {
                 Thread.sleep(HANDSHAKE_POLL_MS)
             } catch (_: InterruptedException) {
@@ -72,5 +80,17 @@ object VelumConnectionContract {
             }
         }
         return false
+    }
+
+    /** Timestamp lama tidak boleh mengesahkan endpoint/sesi yang baru dibangun. */
+    fun isFreshHandshake(latestHandshakeMs: Long, baselineHandshakeMs: Long): Boolean =
+        latestHandshakeMs > 0L && latestHandshakeMs > baselineHandshakeMs
+
+    private fun cleanupIfStillOwned(context: Context, valid: Boolean, cancelled: () -> Boolean) {
+        if (valid) return
+        // Cancellation bisa berarti intent baru sudah mengambil alih. Beri pemilik baru
+        // kesempatan menyelesaikan transisinya, lalu teardown hanya bila operasi lama masih
+        // melihat dirinya tidak dibatalkan. Caller intent baru bertanggung jawab atas state.
+        if (!cancelled()) runCatching { VelumTunnel.down(context) }
     }
 }

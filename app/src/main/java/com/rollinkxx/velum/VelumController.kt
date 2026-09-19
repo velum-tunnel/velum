@@ -78,6 +78,9 @@ class VelumController(context: Context, private val ui: Ui) {
     /** Atomik: dinaikkan dari main thread DAN dari `testWorker`, jadi tidak boleh `++` polos. */
     private val testJobId = AtomicInteger(0)
 
+    /** Generation connect yang memiliki indikator busy; completion lama tidak boleh memadamkan yang baru. */
+    private val activeConnectGen = AtomicInteger(0)
+
     @Volatile
     private var pendingTest: Runnable? = null
 
@@ -111,8 +114,12 @@ class VelumController(context: Context, private val ui: Ui) {
     @Volatile
     private var dead = false
 
+    private val tunnelListener: (Tunnel.State) -> Unit = { newState ->
+        main.post { applyState(newState) }
+    }
+
     init {
-        VelumTunnel.listener = { newState -> main.post { applyState(newState) } }
+        VelumTunnel.setListener(tunnelListener)
     }
 
     /**
@@ -125,7 +132,7 @@ class VelumController(context: Context, private val ui: Ui) {
      */
     fun destroy() {
         dead = true
-        VelumTunnel.listener = null
+        VelumTunnel.clearListenerIf(tunnelListener)
         cancelPendingTest()
         worker.shutdown()
         testWorker.shutdown()
@@ -171,7 +178,7 @@ class VelumController(context: Context, private val ui: Ui) {
      * Apakah pekerjaan dengan generasi [gen] sudah digantikan niat yang lebih baru —
      * dari layar ini maupun dari pelaku lain (ubin pengaturan cepat, receiver boot).
      */
-    private fun stale(gen: Int) = dead || VelumTunnel.intentStale(gen)
+    private fun stale(gen: Int) = VelumTunnel.intentStale(gen)
 
     // ---------- Status ----------
 
@@ -204,10 +211,12 @@ class VelumController(context: Context, private val ui: Ui) {
     /** Sinkronkan status dengan backend di latar, lalu jalankan [onDone] di main thread. */
     fun refreshStateAsync(onDone: () -> Unit) {
         submit(worker) {
-            val s = runCatching { VelumTunnel.refreshState(app) }.getOrDefault(VelumTunnel.state)
+            runCatching { VelumTunnel.refreshState(app) }
             main.post {
                 if (dead) return@post // layar sudah ditutup: jangan sentuh UI, jangan lanjut
-                applyState(s)
+                // Callback backend dapat berubah setelah worker membaca state. Render sumber
+                // proses saat callback main benar-benar dijalankan, bukan snapshot basi.
+                applyState(VelumTunnel.state)
                 onDone()
             }
         }
@@ -231,6 +240,7 @@ class VelumController(context: Context, private val ui: Ui) {
 
     fun connect() {
         val gen = nextIntent()
+        activeConnectGen.set(gen)
         setBusy(true)
         onUi { ui.setMessage("") }
         submit(worker) {
@@ -264,12 +274,14 @@ class VelumController(context: Context, private val ui: Ui) {
                     ui.setStatusText(R.string.status_connecting)
                     ui.refreshStaticInfo()
                 }
+                val attemptedEndpoint = prefs.effectiveEndpoint
                 val connected = VelumConnectionContract.connect(app, prefs, CONNECT_HANDSHAKE_WAIT_MS) { stale(gen) }
                 // State.UP hanya membuktikan antarmuka TUN berhasil dibuat. Endpoint
                 // yang dipilih lewat RTT TCP/443 belum membuktikan bahwa UDP/2408
                 // (WireGuard) dapat dilewati pada jaringan ini. Jangan menyatakan
                 // koneksi berhasil sebelum handshake nyata terlihat.
                 if (!connected) {
+                    EndpointProbe.invalidateFailedEndpoint(prefs, attemptedEndpoint)
                     if (stale(gen)) return@submit
                     if (!tryValidatedEndpointFallback(gen)) {
                         throw IOException("endpoint WireGuard tidak menghasilkan handshake")
@@ -284,7 +296,7 @@ class VelumController(context: Context, private val ui: Ui) {
                 }
                 rememberWorkingEndpoint()
                 ReconnectMonitor.ensure(app)
-                onUi { setBusy(false); applyState(VelumTunnel.state) }
+                onUi { applyState(VelumTunnel.state) }
             } catch (e: Exception) {
                // Bersihkan HANYA bila niat percobaan ini masih yang terbaru.
                // Tanpa cek ini, kegagalan yang terlambat (mis. registrasi atau proba
@@ -306,6 +318,8 @@ class VelumController(context: Context, private val ui: Ui) {
                 ReconnectMonitor.stop(app)
                 runCatching { VelumTunnel.down(app) }
                 fail(R.string.err_connect, e)
+            } finally {
+                if (activeConnectGen.compareAndSet(gen, 0)) onUi { setBusy(false) }
             }
         }
     }
@@ -372,15 +386,20 @@ class VelumController(context: Context, private val ui: Ui) {
             }
             if (ok && !stale(gen)) {
                 // Hanya sesudah handshake nyata endpoint ini layak dicatat terbukti.
+                EndpointProbe.promotePendingCandidate(prefs)
                 rememberWorkingEndpoint()
                 true
             } else {
                 // Bukti endpoint ini gagal; jangan biarkan ia terus diprioritaskan.
+                EndpointProbe.discardPendingCandidate(prefs)
                 prefs.workingEndpoint = null
                 false
             }
         }
-        if (stale(gen)) return false
+        if (stale(gen)) {
+            EndpointProbe.discardPendingCandidate(prefs)
+            return false
+        }
         if (hasil.winner == null) {
             VelumLog.d(TAG, "rotasi tervalidasi: tidak ada kandidat yang lolos handshake (dicoba: ${hasil.attempted.size})")
             return false

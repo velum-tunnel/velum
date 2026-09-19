@@ -6,9 +6,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
 import java.util.concurrent.Callable
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
@@ -30,26 +28,12 @@ object EndpointProbe {
     private const val TOTAL_TIMEOUT_SEC = 6L
     private const val FRESH_MS = 3600_000L
     private const val WG_PORT = 2408
-    private const val KEEP_ALIVE_SEC = 30L
 
     /** DoH untuk penyegaran kandidat anycast; basi setelah 24 jam. */
     private const val DOH_URL =
         "https://cloudflare-dns.com/dns-query?name=engage.cloudflareclient.com&type=A"
     private const val DOH_TIMEOUT_MS = 4000
     private const val DOH_FRESH_MS = 86_400_000L
-
-    /**
-     * Ukuran pool MENGIKUTI jumlah kandidat, bukan angka tetap yang ditulis tangan.
-     *
-     * Sebelumnya `MAX_PROBE_THREADS = 8` sementara kandidat ada 7 (+1 endpoint registrasi)
-     * — pas-pasan, dan tidak ada yang menegakkan hubungan itu. Menambah satu kandidat saja
-     * membuat tugas kesembilan mengantre di `LinkedBlockingQueue`, tidak sempat berjalan
-     * dalam anggaran 6 detik, lalu dibatalkan **diam-diam**: proba tampak berhasil padahal
-     * sebagian kandidat tidak pernah diukur, dan endpoint "tercepat" dipilih dari data
-     * yang tidak lengkap.
-     */
-    private val probeThreads = VelumUpstream.CANDIDATES.size + 1
-
 
     /**
      * Menyegarkan [Prefs.speedEndpoint] bila basi (>1 jam). Tidak pernah melempar;
@@ -71,12 +55,7 @@ object EndpointProbe {
             if (ranked.isEmpty()) return // gagal total: jangan sentuh apa pun
             val best = ranked.first()
             val regHost = prefs.endpoint?.let(VelumFormat::hostPart)
-            prefs.speedEndpoint =
-                if (best == regHost || !VelumFormat.isIpLiteral(best)) null else {
-                    val isV6 = best.contains(":") && best.count { it == ':' } > 1
-                    val safeBest = if (isV6 && !best.startsWith("[")) "[$best]" else best
-                    "$safeBest:$WG_PORT"
-                }
+            prefs.speedEndpoint = VelumProbePolicy.speedEndpointFor(best, regHost, WG_PORT)
             prefs.speedEndpointAt = System.currentTimeMillis()
             VelumLog.d(TAG, "endpoint tercepat: ${prefs.effectiveEndpoint} (${ranked.size} terukur)")
         } catch (e: Exception) {
@@ -145,21 +124,6 @@ object EndpointProbe {
     }
 
     /**
-     * Pool bersama bert thread daemon (menganggur → mati sendiri) supaya tidak membuat
-     * dan membuang sampai 8 thread setiap kali pengguna menekan Sambungkan.
-     */
-    private val pool: ExecutorService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        // core == max supaya pengukuran benar-benar paralel; allowCoreThreadTimeOut
-        // membuat thread menganggur mati sendiri setelah KEEP_ALIVE.
-        ThreadPoolExecutor(
-            probeThreads, probeThreads, KEEP_ALIVE_SEC, TimeUnit.SECONDS,
-            LinkedBlockingQueue()
-        ) { r -> Thread(r, "velum-probe").apply { isDaemon = true } }.apply {
-            allowCoreThreadTimeOut(true)
-        }
-    }
-
-    /**
      * Host terurut dari tercepat (endpoint registrasi + kandidat anycast); kosong bila
      * proba gagal total. Blocking ≤ ~6 detik.
      *
@@ -179,7 +143,7 @@ object EndpointProbe {
     fun refreshCandidates(prefs: Prefs) {
         try {
             if (System.currentTimeMillis() - prefs.dohCandidatesAt < DOH_FRESH_MS) return
-            val ips = fetchDohAddresses()
+            val ips = fetchDohAddresses().filter(VelumFormat::isIpv4).distinct().take(VelumDoh.MAX_STORED)
             if (ips.isEmpty()) return // gagal total: pertahankan daftar lama/statis
             prefs.dohCandidates = ips.joinToString(",")
             prefs.dohCandidatesAt = System.currentTimeMillis()
@@ -199,7 +163,7 @@ object EndpointProbe {
             conn.setRequestProperty("Connection", "close")
             conn.useCaches = false
             if (conn.responseCode !in 200..299) return emptyList()
-            VelumDoh.parseARecords(conn.inputStream.bufferedReader().use { it.readText() })
+            VelumDoh.parseARecords(conn.inputStream.use { VelumIo.readUtf8Bounded(it, DOH_MAX_BYTES) })
         } catch (_: Exception) {
             emptyList()
         } finally {
@@ -209,10 +173,7 @@ object EndpointProbe {
 
     /** Kandidat anycast yang dipakai proba: hasil DoH bila pernah berhasil, selain itu statis. */
     private fun candidatesFor(prefs: Prefs): List<String> {
-        val doh = prefs.dohCandidates
-            ?.split(',')
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
+        val doh = VelumProbePolicy.sanitizeDohCandidates(prefs.dohCandidates)
         return if (!doh.isNullOrEmpty()) doh else VelumUpstream.CANDIDATES
     }
 
@@ -235,10 +196,36 @@ object EndpointProbe {
             wgPort = WG_PORT
         )
         if (d.host == null) return false
-        prefs.workingEndpoint = null
-        prefs.speedEndpoint = d.speedEndpoint
-        prefs.speedEndpointAt = System.currentTimeMillis()
+        prefs.pendingEndpoint = d.speedEndpoint ?: prefs.endpoint
         return d.changed
+    }
+
+    /** Promosikan kandidat pending hanya setelah handshake baru terbukti. */
+    fun promotePendingCandidate(prefs: Prefs) {
+        val candidate = prefs.pendingEndpoint ?: return
+        prefs.pendingEndpoint = null
+        prefs.workingEndpoint = candidate
+        prefs.speedEndpoint = if (candidate == prefs.endpoint) null else candidate
+        prefs.speedEndpointAt = System.currentTimeMillis()
+    }
+
+    /** Buang kandidat belum terverifikasi dan cache RTT yang sama bila baru saja gagal. */
+    fun discardPendingCandidate(prefs: Prefs) {
+        val failed = prefs.pendingEndpoint
+        prefs.pendingEndpoint = null
+        if (VelumProbePolicy.shouldInvalidateSpeed(prefs.speedEndpoint, failed)) {
+            prefs.speedEndpoint = null
+            prefs.speedEndpointAt = 0L
+        }
+    }
+
+    /** Invalidasi endpoint RTT yang gagal pada percobaan koneksi utama. */
+    fun invalidateFailedEndpoint(prefs: Prefs, failed: String?) {
+        if (VelumProbePolicy.shouldInvalidateSpeed(prefs.speedEndpoint, failed)) {
+            prefs.speedEndpoint = null
+            prefs.speedEndpointAt = 0L
+        }
+        if (prefs.workingEndpoint == failed) prefs.workingEndpoint = null
     }
 
     /** Host terurut dari tercepat; kosong bila semua gagal. Blocking ≤ ~6 detik. */
@@ -248,8 +235,11 @@ object EndpointProbe {
         hosts.addAll(candidatesFor(prefs))
         if (hosts.isEmpty()) return emptyList()
         val tasks = hosts.map { host -> Callable { host to tcpRttMs(host) } }
+        val executor = Executors.newFixedThreadPool(hosts.size) { r ->
+            Thread(r, "velum-probe").apply { isDaemon = true }
+        }
         return try {
-            pool.invokeAll(tasks, TOTAL_TIMEOUT_SEC, TimeUnit.SECONDS)
+            executor.invokeAll(tasks, TOTAL_TIMEOUT_SEC, TimeUnit.SECONDS)
                 .mapNotNull {
                     try {
                         if (it.isCancelled) null else it.get()
@@ -262,6 +252,8 @@ object EndpointProbe {
                 .map { it.first }
         } catch (_: Exception) {
             emptyList()
+        } finally {
+            executor.shutdownNow()
         }
     }
 
@@ -275,5 +267,7 @@ object EndpointProbe {
             -1
         }
     }
+
+    private const val DOH_MAX_BYTES = 64 * 1024
 
 }

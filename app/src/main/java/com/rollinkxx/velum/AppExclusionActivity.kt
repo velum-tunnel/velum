@@ -129,7 +129,11 @@ class AppExclusionActivity : AppCompatActivity() {
      */
     private fun save() {
         val before = prefs.excludedApps
-        val after = boxes.filter { it.value.isChecked }.keys.toSet()
+        // Package visibility Android tidak selalu menampilkan semua package yang pernah
+        // disimpan. Hanya package yang terlihat boleh diubah oleh checkbox; pilihan lama
+        // untuk package tersembunyi harus dipertahankan agar tidak hilang diam-diam.
+        val visible = boxes.keys
+        val after = (before - visible) + boxes.filter { it.value.isChecked }.keys
         prefs.excludedApps = after
         val app = applicationContext
         if (after == before || VelumTunnel.state != Tunnel.State.UP) {

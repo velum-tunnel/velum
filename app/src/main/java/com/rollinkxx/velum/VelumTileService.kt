@@ -44,8 +44,10 @@ class VelumTileService : TileService() {
         super.onClick()
         val app = applicationContext
         worker.execute {
-            val prefs = Prefs.of(app)
             try {
+                // KeystoreUnavailableException juga harus masuk failure path ini; bila Prefs
+                // dibuka sebelum try, executor dapat menghentikan aksi tanpa update tile.
+                val prefs = Prefs.of(app)
                 // State lokal di-reset saat proses lahir ulang; backend adalah sumber
                 // kebenaran untuk menentukan aksi tile, bukan nilai default DOWN.
                 VelumTunnel.refreshState(app)
