@@ -63,7 +63,7 @@ android {
             applicationIdSuffix = ".preview"
             versionNameSuffix = "-preview"
             // Kunci debug bawaan Android: selalu tersedia, tidak perlu Secrets.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("debugConfig")
             // Sengaja tidak debuggable supaya perilakunya sedekat mungkin dengan rilis.
             isDebuggable = false
         }
