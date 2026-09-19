@@ -430,6 +430,12 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
             return
         }
         controller.runAlwaysOnState { s ->
+            // State bisa berubah jadi DOWN selama pembacaan async di worker;
+            // bila sudah DOWN, jangan tampilkan status ON yang basi.
+            if (controller.state != Tunnel.State.UP) {
+                vpnSettingsSub.setText(R.string.sub_vpn_settings)
+                return@runAlwaysOnState
+            }
             vpnSettingsSub.setText(
                 when {
                     s == null -> R.string.sub_vpn_settings

@@ -125,34 +125,40 @@ object ReconnectMonitor {
         if (!bouncing.tryClaim()) return
         lastBounceMs = SystemClock.elapsedRealtime()
         val gen = VelumTunnel.currentIntent
-        worker.execute {
-            try {
-                val prefs = try {
-                    Prefs.of(app)
-                } catch (e: KeystoreUnavailableException) {
-                    VelumLog.w(TAG, "recovery dibatalkan: penyimpanan aman tidak tersedia", e)
-                    return@execute
+        try {
+            worker.execute {
+                try {
+                    val prefs = try {
+                        Prefs.of(app)
+                    } catch (e: KeystoreUnavailableException) {
+                        VelumLog.w(TAG, "recovery dibatalkan: penyimpanan aman tidak tersedia", e)
+                        return@execute
+                    }
+                    VelumTunnel.refreshState(app)
+                    val should = VelumRecoveryDecision.shouldSchedule(
+                        trigger = trigger,
+                        wasUp = prefs.wasUp,
+                        registered = prefs.isRegistered,
+                        tunnelUp = VelumTunnel.state == Tunnel.State.UP,
+                        bouncing = false,
+                        intentStale = VelumTunnel.intentStale(gen)
+                    )
+                    if (!should) return@execute
+                    if (VelumTunnel.state != Tunnel.State.UP) {
+                        tryUpOnce(app, prefs, gen)
+                    } else if (trigger == VelumRecoveryDecision.Trigger.NETWORK) {
+                        bounceWithBackoff(app, prefs, gen)
+                    }
+                } catch (e: Exception) {
+                    VelumLog.w(TAG, "recovery otomatis gagal", e)
+                } finally {
+                    bouncing.release()
                 }
-                VelumTunnel.refreshState(app)
-                val should = VelumRecoveryDecision.shouldSchedule(
-                    trigger = trigger,
-                    wasUp = prefs.wasUp,
-                    registered = prefs.isRegistered,
-                    tunnelUp = VelumTunnel.state == Tunnel.State.UP,
-                    bouncing = false,
-                    intentStale = VelumTunnel.intentStale(gen)
-                )
-                if (!should) return@execute
-                if (VelumTunnel.state != Tunnel.State.UP) {
-                    tryUpOnce(app, prefs, gen)
-                } else if (trigger == VelumRecoveryDecision.Trigger.NETWORK) {
-                    bounceWithBackoff(app, prefs, gen)
-                }
-            } catch (e: Exception) {
-                VelumLog.w(TAG, "recovery otomatis gagal", e)
-            } finally {
-                bouncing.release()
             }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // Worker sudah dimatikan saat proses shutdown — jangan crash, lepas claim.
+            VelumLog.i(TAG, "recovery dilewati: worker sudah dimatikan")
+            bouncing.release()
         }
     }
 
@@ -179,30 +185,35 @@ object ReconnectMonitor {
         // Tanpa ini, pantulan yang sedang berjalan bisa menyalakan tunnel tepat setelah
         // pengguna memutusnya lewat ubin.
         val gen = VelumTunnel.currentIntent
-        worker.execute {
-            try {
-                // Tanpa keystore tidak ada niat sah yang bisa dibaca; jangan bertindak
-                // otomatis dalam keadaan itu.
-                val prefs = try {
-                    Prefs.of(app)
-                } catch (e: KeystoreUnavailableException) {
-                    VelumLog.w(TAG, "pantulan dibatalkan: penyimpanan aman tidak tersedia", e)
-                    return@execute
+        try {
+            worker.execute {
+                try {
+                    // Tanpa keystore tidak ada niat sah yang bisa dibaca; jangan bertindak
+                    // otomatis dalam keadaan itu.
+                    val prefs = try {
+                        Prefs.of(app)
+                    } catch (e: KeystoreUnavailableException) {
+                        VelumLog.w(TAG, "pantulan dibatalkan: penyimpanan aman tidak tersedia", e)
+                        return@execute
+                    }
+                    if (!prefs.wasUp || !prefs.isRegistered) return@execute
+                    if (VelumTunnel.intentStale(gen)) {
+                        VelumLog.i(TAG, "pantulan jaringan dibatalkan: ada niat pengguna yang lebih baru")
+                        return@execute
+                    }
+                    if (VelumTunnel.state != Tunnel.State.UP) {
+                        tryUpOnce(app, prefs, gen)
+                        return@execute
+                    }
+                    VelumLog.i(TAG, "jaringan $reason: memantul tunnel")
+                    bounceWithBackoff(app, prefs, gen)
+                } finally {
+                    bouncing.release()
                 }
-                if (!prefs.wasUp || !prefs.isRegistered) return@execute
-                if (VelumTunnel.intentStale(gen)) {
-                    VelumLog.i(TAG, "pantulan jaringan dibatalkan: ada niat pengguna yang lebih baru")
-                    return@execute
-                }
-                if (VelumTunnel.state != Tunnel.State.UP) {
-                    tryUpOnce(app, prefs, gen)
-                    return@execute
-                }
-                VelumLog.i(TAG, "jaringan $reason: memantul tunnel")
-                bounceWithBackoff(app, prefs, gen)
-            } finally {
-                bouncing.release()
             }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            VelumLog.i(TAG, "pantulan jaringan dilewati: worker sudah dimatikan")
+            bouncing.release()
         }
     }
 

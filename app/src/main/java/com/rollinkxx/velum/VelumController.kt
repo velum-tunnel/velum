@@ -161,13 +161,20 @@ class VelumController(context: Context, private val ui: Ui) {
      * [refreshStateAsync] berjalan membuat `onDone` memanggil [connect] pada controller
      * yang baru saja dimatikan. Jadi penyerahan selalu diperiksa, dan sisa race antara
      * pemeriksaan dan penyerahan ditelan di sini — bukan dibiarkan jadi crash.
+     *
+     * @return true bila berhasil diserahkan, false bila dilewati karena controller mati.
      */
-    private fun submit(executor: ExecutorService, block: () -> Unit) {
-        if (dead) return
-        try {
+    private fun submit(executor: ExecutorService, block: () -> Unit): Boolean {
+        if (dead) {
+            VelumLog.i(TAG, "pekerjaan dilewati: controller sudah dimatikan (dead)")
+            return false
+        }
+        return try {
             executor.execute(block)
+            true
         } catch (_: RejectedExecutionException) {
-            VelumLog.i(TAG, "pekerjaan dilewati: controller sudah dimatikan")
+            VelumLog.i(TAG, "pekerjaan dilewati: controller sudah dimatikan (rejected)")
+            false
         }
     }
 
@@ -237,7 +244,7 @@ class VelumController(context: Context, private val ui: Ui) {
         val gen = nextIntent()
         setBusy(true)
         onUi { ui.setMessage("") }
-        submit(worker) {
+        val submitted = submit(worker) {
             try {
                 if (stale(gen)) return@submit
                 if (prefs.isRegistered && !prefs.warpEnabled) {
@@ -311,6 +318,11 @@ class VelumController(context: Context, private val ui: Ui) {
                 runCatching { VelumTunnel.down(app) }
                 fail(R.string.err_connect, e)
             }
+        }
+        if (!submitted) {
+            // Controller sudah dimatikan (rotasi layar cepat) sebelum pekerjaan sempat
+            // diserahkan — busy tidak boleh tertinggal true selamanya.
+            onUi { setBusy(false) }
         }
     }
 
@@ -422,8 +434,11 @@ class VelumController(context: Context, private val ui: Ui) {
         setBusy(true)
         onUi { ui.setStatusText(R.string.status_disconnecting) }
         ReconnectMonitor.stop(app)
-        submit(worker) {
+        val submitted = submit(worker) {
             runCatching { VelumTunnel.down(app) }
+            onUi { setBusy(false); applyState(VelumTunnel.state) }
+        }
+        if (!submitted) {
             onUi { setBusy(false); applyState(VelumTunnel.state) }
         }
     }
@@ -435,7 +450,7 @@ class VelumController(context: Context, private val ui: Ui) {
         setBusy(true)
         cancelPendingTest()
         ReconnectMonitor.stop(app)
-        submit(worker) {
+        val submitted = submit(worker) {
             runCatching { VelumTunnel.down(app) }
             VelumApi.unregister(prefs)
             onUi {
@@ -444,6 +459,12 @@ class VelumController(context: Context, private val ui: Ui) {
                 ui.refreshStaticInfo()
                 ui.showTest(prefs.lastTest) // registrasi dihapus → hasil uji lama ikut hilang
                 ui.setMessageRes(R.string.reset_done)
+            }
+        }
+        if (!submitted) {
+            onUi {
+                setBusy(false)
+                applyState(Tunnel.State.DOWN)
             }
         }
     }
@@ -500,7 +521,7 @@ class VelumController(context: Context, private val ui: Ui) {
             }
         }
         onUi { ui.setTestTextRes(R.string.test_waiting) }
-        submit(testWorker) {
+        val submitted = submit(testWorker) {
             val waitMs = if (attempt == 0) HANDSHAKE_WAIT_MS else HANDSHAKE_WAIT_RETRY_MS
             val ready = awaitHandshake(waitMs)
             val tunnelUp = VelumTunnel.state == Tunnel.State.UP
@@ -518,6 +539,18 @@ class VelumController(context: Context, private val ui: Ui) {
                 }
             }
             main.post { publishTestResult(job, tunnelUp, ready, trace, error, fromButton, attempt) }
+        }
+        if (!submitted) {
+            // Controller dimatikan sebelum uji sempat diserahkan — jangan biarkan
+            // testInFlight true selamanya (baris "Menunggu data…" menggantung).
+            testInFlight = false
+            if (fromButton) {
+                buttonTestStatusShown = false
+                onUi {
+                    ui.showTest(prefs.lastTest)
+                    ui.render(VelumTunnel.state)
+                }
+            }
         }
     }
 
