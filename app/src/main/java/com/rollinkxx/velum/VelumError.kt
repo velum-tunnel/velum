@@ -61,6 +61,12 @@ object VelumError {
         // melaporkannya sebagai "Kesalahan jaringan" menyuruh pengguna mengganti Wi-Fi
         // untuk masalah yang tidak ada hubungannya dengan jaringan.
         is KeystoreUnavailableException -> Kind.KEYSTORE
+        // BadResponse = respons server tidak sesuai format yang diharapkan — bukan
+        // masalah jaringan, jangan di-retry sebagai NETWORK. Sebelumnya ia jatuh ke
+        // IOException -> NETWORK karena BadResponse extends IOException, sehingga
+        // registerWithRetry mengulang sekali untuk kesalahan yang tidak akan sembuh
+        // dengan retry.
+        is VelumRegistration.BadResponse -> Kind.UNKNOWN
         is UnknownHostException, is SocketTimeoutException, is ConnectException -> Kind.NETWORK
         // Penanda layanan diperiksa SEBELUM memutuskan "ini masalah jaringan".
         // Penolakan layanan latar depan bisa datang terbungkus IOException (mis. dari

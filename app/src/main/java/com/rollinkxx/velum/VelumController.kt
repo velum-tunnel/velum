@@ -115,8 +115,16 @@ class VelumController(context: Context, private val ui: Ui) {
     @Volatile
     private var dead = false
 
+    /**
+     * Listener milik instance ini. Disimpan supaya `destroy()` hanya menghapus listener
+     * miliknya sendiri — tanpa ini rotasi layar (new Activity dibuat SEBELUM old
+     * onDestroy) membuat old controller menghapus listener milik new controller,
+     * sehingga UI baru tidak menerima perubahan status tunnel.
+     */
+    private val myListener: (Tunnel.State) -> Unit = { newState -> main.post { applyState(newState) } }
+
     init {
-        VelumTunnel.listener = { newState -> main.post { applyState(newState) } }
+        VelumTunnel.listener = myListener
     }
 
     /**
@@ -129,7 +137,11 @@ class VelumController(context: Context, private val ui: Ui) {
      */
     fun destroy() {
         dead = true
-        VelumTunnel.listener = null
+        // Hanya hapus bila masih milik kita — cegah race rotasi layar di mana
+        // old onDestroy menghapus listener yang baru saja dipasang new Activity.
+        if (VelumTunnel.listener === myListener) {
+            VelumTunnel.listener = null
+        }
         cancelPendingTest()
         worker.shutdown()
         testWorker.shutdown()

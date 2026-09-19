@@ -127,9 +127,34 @@ object VelumFormat {
         // memeriksa "digit dan titik" sehingga "999.999.999.999" dianggap literal
         // dan dipasang sebagai speedEndpoint, yang kemudian gagal di WireGuard
         // tanpa pesan yang jelas. Pakai isIpv4 ketat untuk jalur ini.
+        // IPv6 juga diperketat: sebelumnya "::::" dianggap literal karena hanya
+        // cek count ':' >1, sehingga bisa dipasang sebagai speedEndpoint dan gagal
+        // dengan error kabur. Sekarang pakai isIpv6Strict.
         val isV4 = isIpv4(host)
-        val isV6 = host.contains(":") && host.count { it == ':' } > 1
+        val isV6 = isIpv6Strict(host)
         return isV4 || isV6
+    }
+
+    /**
+     * Apakah [s] literal IPv6 yang masuk akal: minimal 2 titik dua, mengandung
+     * hex digit, hanya hex+colon, tidak mengandung ":::" (tiga colon berurutan),
+     * tidak hanya colon, dan "::" muncul maksimal sekali.
+     * Dipakai untuk membedakan literal vs nama domain (isIpLiteral) dan untuk
+     * validasi endpoint manual (normalizeManualEndpoint).
+     */
+    fun isIpv6Strict(s: String): Boolean {
+        if (s.isEmpty()) return false
+        if (s.count { it == ':' } < 2) return false
+        if (!s.any { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) return false
+        if (!s.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' || it == ':' }) return false
+        if (s.contains(":::")) return false
+        if (s.trim(':').isEmpty()) return false
+        // "::" boleh muncul maksimal sekali — "1::2::3" tidak sah
+        var idx = s.indexOf("::")
+        if (idx >= 0) {
+            if (s.indexOf("::", idx + 2) >= 0) return false
+        }
+        return true
     }
 
     /**
@@ -158,8 +183,9 @@ object VelumFormat {
             val end = s.indexOf("]:").takeIf { it > 0 } ?: return null
             val host = s.substring(1, end)
             val port = s.substring(end + 2)
-            val v6Sah = host.count { it == ':' } >= 2 &&
-                host.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' || it == ':' }
+            // IPv6 ketat: pakai isIpv6Strict supaya "::::" atau ":::" ditolak
+            // dengan pesan invalid di dialog, bukan gagal di WireGuard dengan error kabur.
+            val v6Sah = isIpv6Strict(host)
             return if (v6Sah && isValidPort(port)) "[$host]:$port" else null
         }
         val idx = s.lastIndexOf(':')
