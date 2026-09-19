@@ -1,5 +1,3 @@
-import com.android.build.api.variant.FilterConfiguration.FilterType.ABI
-
 plugins {
     alias(libs.plugins.android.application)
 }
@@ -23,6 +21,12 @@ android {
     }
 
     signingConfigs {
+        create("debugConfig") {
+            storeFile = file("${rootDir}/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("release") {
             // Hanya terisi di CI rilis lewat environment; lokal sengaja kosong
             // sehingga build debug tidak terdampak.
@@ -33,29 +37,6 @@ android {
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
             }
-        }
-    }
-
-    // Pemecahan APK per arsitektur. Isi APK ini didominasi pustaka native WireGuard
-    // (satu `.so` per ABI, ±2 MB masing-masing) — bukan kode Kotlin aplikasi, yang
-    // jumlahnya hanya ribuan baris dan kontribusi ukurannya kecil di samping `.so`.
-    // (Angka baris sengaja tidak ditulis di sini: ia berubah setiap rilis dan komentar
-    // yang memuat angka usang lebih menyesatkan daripada komentar tanpa angka.)
-    // R8 tidak menyentuh `.so`, jadi memecah per ABI adalah satu-satunya cara
-    // menurunkan ukuran secara berarti: perangkat hanya mengunduh arsitekturnya sendiri.
-    //
-    // `isUniversalApk = true` tetap dipertahankan: distribusi lewat GitHub Releases
-    // (bukan Play Store) berarti pengguna memilih berkas sendiri, dan yang tidak tahu
-    // arsitektur ponselnya butuh satu berkas yang pasti berjalan di mana pun.
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            // 64-bit wajib (Play Store & mayoritas perangkat sejak 2019); armeabi-v7a
-            // menjaga perangkat lama minSdk 24; x86_64 untuk emulator & Chromebook.
-            // `x86` 32-bit sengaja dibuang: praktis tidak ada perangkat nyata memakainya.
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk = true
         }
     }
 
@@ -89,6 +70,7 @@ android {
 
         debug {
             applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debugConfig")
         }
     }
 
@@ -123,27 +105,6 @@ android {
 
     packaging {
         resources.excludes += setOf("META-INF/*.version", "kotlin/**", "DebugProbesKt.bin")
-    }
-}
-
-// Setiap APK hasil pemecahan WAJIB punya versionCode berbeda. Bila dibiarkan sama,
-// perangkat menolak memasang APK arsitektur lain sebagai pembaruan ("versi sama"),
-// dan toko aplikasi tidak bisa memilih berkas yang tepat.
-//
-// Rumus: abiCode * 1000 + versionCode dasar. APK universal sengaja TIDAK diubah
-// sehingga versionCode-nya paling rendah — itu yang diinginkan, agar APK spesifik
-// arsitektur selalu lebih diutamakan daripada yang universal.
-val abiCodes = mapOf("armeabi-v7a" to 1, "x86_64" to 2, "arm64-v8a" to 3)
-
-androidComponents {
-    onVariants { variant ->
-        variant.outputs.forEach { output ->
-            val abi = output.filters.find { it.filterType == ABI }?.identifier
-            val base = abiCodes[abi]
-            if (base != null) {
-                output.versionCode.set(base * 1000 + (output.versionCode.get() ?: 0))
-            }
-        }
     }
 }
 
