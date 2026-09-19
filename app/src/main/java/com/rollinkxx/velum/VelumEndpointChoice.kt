@@ -57,7 +57,8 @@ object VelumEndpointChoice {
         val next = ranked.firstOrNull { it != currentHost }
             ?: return Decision(host = null, speedEndpoint = null, effectiveHost = currentHost, changed = false)
         val speed = if (VelumFormat.isIpLiteral(next)) {
-            val isV6 = next.contains(":") && next.count { it == ':' } > 1
+            // isIpLiteral sudah pakai isIpv6Strict, jadi cek IPv6 konsisten
+            val isV6 = VelumFormat.isIpv6Strict(next.trim('[', ']'))
             val safeNext = if (isV6 && !next.startsWith("[")) "[$next]" else next
             "$safeNext:$wgPort"
         } else null

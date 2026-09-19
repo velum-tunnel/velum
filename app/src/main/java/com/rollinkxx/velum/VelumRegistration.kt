@@ -61,10 +61,15 @@ object VelumRegistration {
     fun normalizeEndpoint(host: String?): String {
         val trimmed = host?.trim().orEmpty()
         if (trimmed.isEmpty()) return VelumUpstream.DEFAULT_ENDPOINT
-        val isV6 = trimmed.contains(":") && trimmed.count { it == ':' } > 1
+        // Pakai isIpv6Strict supaya "::::" atau "1::2::3" tidak dianggap IPv6 valid
+        // — sebelumnya hanya cek count ':' >1 sehingga "::::" lolos dan dibungkus
+        // menjadi "[::::]:2408" yang gagal di WireGuard dengan error kabur.
+        val isV6 = VelumFormat.isIpv6Strict(trimmed.trim('[', ']'))
         val sudahBerport = if (trimmed.startsWith("[")) {
             trimmed.contains("]:")
         } else {
+            // Jika host adalah IPv6 strict, colon tunggal bukan port
+            // Jika bukan IPv6 strict, colon tunggal dianggap port (IPv4/domain)
             trimmed.count { it == ':' } == 1 && !isV6
         }
         if (sudahBerport) return trimmed
