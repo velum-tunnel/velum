@@ -81,7 +81,7 @@ object EndpointProbe {
             val regHost = prefs.endpoint?.let(VelumFormat::hostPart)
             prefs.speedEndpoint =
                 if (best == regHost || !VelumFormat.isIpLiteral(best)) null else {
-                    val isV6 = best.contains(":") && best.count { it == ':' } > 1
+                    val isV6 = VelumFormat.isIpv6Strict(best.trim('[', ']'))
                     val safeBest = if (isV6 && !best.startsWith("[")) "[$best]" else best
                     "$safeBest:$WG_PORT"
                 }
