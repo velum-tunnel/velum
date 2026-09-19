@@ -53,9 +53,13 @@ class VelumController(context: Context, private val ui: Ui) {
     private val app = context.applicationContext
     private val prefs = Prefs.of(app)
     private val main = Handler(Looper.getMainLooper())
-    private val worker: ExecutorService = Executors.newSingleThreadExecutor()
+    private val worker: ExecutorService = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "velum-worker").apply { isDaemon = true }
+    }
     /** Terpisah dari [worker] agar uji yang lambat tidak menahan Sambungkan/Putuskan. */
-    private val testWorker: ExecutorService = Executors.newSingleThreadExecutor()
+    private val testWorker: ExecutorService = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "velum-test").apply { isDaemon = true }
+    }
 
     @Volatile
     var busy = false
@@ -353,6 +357,13 @@ class VelumController(context: Context, private val ui: Ui) {
         // dengan endpoint lain yang justru tidak pernah diminta.
         if (!prefs.manualEndpoint.isNullOrBlank()) return false
         val failingHost = prefs.effectiveEndpoint?.let(VelumFormat::hostPart)
+        // Simpan keadaan sebelum mencoba kandidat: bila semua gagal, kita tidak boleh
+        // meninggalkan kandidat terakhir yang baru saja terbukti GAGAL sebagai
+        // speedEndpoint segar — itu membuat percobaan berikutnya memakai endpoint buruk
+        // yang sama tanpa proba ulang (refresh() mengira masih segar <1 jam).
+        val prevSpeed = prefs.speedEndpoint
+        val prevSpeedAt = prefs.speedEndpointAt
+        val prevWorking = prefs.workingEndpoint
         val ranked = EndpointProbe.measureRanked(prefs)
         val hasil = VelumVerifiedChoice.pickVerified(
             ranked = ranked,
@@ -380,9 +391,23 @@ class VelumController(context: Context, private val ui: Ui) {
                 false
             }
         }
-        if (stale(gen)) return false
+        if (stale(gen)) {
+            // Niat baru datang di tengah fallback: kembalikan keadaan semula supaya
+            // pelaku yang lebih baru tidak melihat Prefs setengah jalan.
+            prefs.workingEndpoint = prevWorking
+            prefs.speedEndpoint = prevSpeed
+            prefs.speedEndpointAt = prevSpeedAt
+            return false
+        }
         if (hasil.winner == null) {
             VelumLog.d(TAG, "rotasi tervalidasi: tidak ada kandidat yang lolos handshake (dicoba: ${hasil.attempted.size})")
+            // Semua kandidat gagal: bukti lama sudah terbukti tidak bekerja, dan
+            // kandidat terakhir yang dicoba juga gagal — jangan biarkan ia menetap
+            // sebagai speedEndpoint segar. Kosongkan supaya percobaan berikutnya
+            // memicu proba ulang penuh, bukan memakai endpoint buruk yang baru saja gagal.
+            prefs.workingEndpoint = null
+            prefs.speedEndpoint = null
+            prefs.speedEndpointAt = 0L
             return false
         }
         VelumLog.d(TAG, "endpoint terverifikasi handshake: ${prefs.effectiveEndpoint} (${hasil.attempted.size} dicoba)")
@@ -616,10 +641,14 @@ class VelumController(context: Context, private val ui: Ui) {
     private fun rotateEndpointAndReconnect() {
         if (!prefs.wasUp || !prefs.isRegistered) return // pengguna memutus di tengah jalan
         val current = prefs.effectiveEndpoint
-        onUi {
-            testSuppressAuto = true
-            ui.setTestTextRes(R.string.test_searching)
-        }
+        // Penekanan auto-uji harus terlihat oleh main thread SEGERA, bukan lewat
+        // post async yang bisa kalah lomba dengan post applyState dari backend.
+        // Sebelumnya diset lewat onUi { testSuppressAuto = true } yang dipost,
+        // sehingga ada jendela di mana applyState(UP) terproses dulu dan memicu
+        // auto-uji kedua (double test). Volatile diset langsung di sini, UI text
+        // tetap lewat onUi.
+        testSuppressAuto = true
+        onUi { ui.setTestTextRes(R.string.test_searching) }
         try {
             if (!EndpointProbe.rotate(prefs, current)) {
                 // Jujur tentang artinya: rotasi bisa gagal karena tidak ada kandidat lain
@@ -636,7 +665,7 @@ class VelumController(context: Context, private val ui: Ui) {
         } catch (e: Exception) {
             VelumLog.w(TAG, "putar endpoint & sambung ulang gagal", e)
         } finally {
-            onUi { testSuppressAuto = false }
+            testSuppressAuto = false
         }
     }
 

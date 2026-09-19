@@ -33,7 +33,9 @@ object ReconnectMonitor {
      */
     private val BACKOFF_MS = longArrayOf(2000, 5000, 10000, 30000, 60000)
 
-    private val worker = Executors.newSingleThreadExecutor()
+    private val worker = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "velum-reconnect").apply { isDaemon = true }
+    }
 
     @Volatile
     private var callback: ConnectivityManager.NetworkCallback? = null

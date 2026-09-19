@@ -32,7 +32,9 @@ class AppExclusionActivity : AppCompatActivity() {
     private val boxes = LinkedHashMap<String, CheckBox>()
 
     /** Menyambungkan ulang tunnel di latar setelah daftar pengecualian berubah. */
-    private val worker = Executors.newSingleThreadExecutor()
+    private val worker = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "velum-exclusion").apply { isDaemon = true }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -140,19 +142,23 @@ class AppExclusionActivity : AppCompatActivity() {
             return
         }
         Toast.makeText(this, R.string.excluded_saved_restarting, Toast.LENGTH_SHORT).show()
-        worker.execute {
-            try {
-                if (!VelumConnectionContract.reconnect(
-                        app,
-                        prefs,
-                        VelumConnectionContract.HANDSHAKE_WAIT_MS
-                    ) { !prefs.wasUp }
-                ) {
-                    VelumLog.w(TAG, "pengecualian aplikasi tidak menghasilkan handshake")
+        try {
+            worker.execute {
+                try {
+                    if (!VelumConnectionContract.reconnect(
+                            app,
+                            prefs,
+                            VelumConnectionContract.HANDSHAKE_WAIT_MS
+                        ) { !prefs.wasUp }
+                    ) {
+                        VelumLog.w(TAG, "pengecualian aplikasi tidak menghasilkan handshake")
+                    }
+                } catch (e: Exception) {
+                    VelumLog.w(TAG, "gagal menyambungkan ulang setelah pengecualian disimpan", e)
                 }
-            } catch (e: Exception) {
-                VelumLog.w(TAG, "gagal menyambungkan ulang setelah pengecualian disimpan", e)
             }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            VelumLog.i(TAG, "reconnect pengecualian dilewati: worker sudah dimatikan")
         }
         finish()
     }

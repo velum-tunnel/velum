@@ -19,33 +19,69 @@ import java.io.File
 class Prefs(context: Context) {
     private val sp: SharedPreferences = open(context.applicationContext)
 
+    /** Baca aman: bila dekripsi gagal karena keystore, instance dibuang dan null/default dikembalikan. */
+    private fun <T> safeGet(default: T, block: () -> T): T {
+        return try {
+            block()
+        } catch (e: Exception) {
+            // Kegagalan dekripsi setelah instance berhasil dibuka (mis. keystore
+            // terkunci ulang, hardware error). Jangan biarkan crash; kembalikan default
+            // dan buang instance supaya percobaan berikutnya mencoba buka ulang.
+            VelumLog.w(TAG, "gagal membaca prefs terenkripsi; mengembalikan default", e)
+            if (isKeystoreFailure(e)) {
+                synchronized(Companion) { instance = null }
+            }
+            default
+        }
+    }
+
+    private fun safeSet(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Exception) {
+            VelumLog.w(TAG, "gagal menulis prefs terenkripsi", e)
+            if (isKeystoreFailure(e)) {
+                synchronized(Companion) { instance = null }
+            }
+        }
+    }
+
+    private fun isKeystoreFailure(e: Exception): Boolean {
+        val msg = (e.message ?: "").lowercase()
+        return e is SecurityException ||
+            "keystore" in msg ||
+            "key" in msg && "invalid" in msg ||
+            "decrypt" in msg ||
+            "encrypt" in msg
+    }
+
     var privateKey: String?
-        get() = sp.getString(K_PRIV, null)
-        set(v) = sp.edit().putString(K_PRIV, v).apply()
+        get() = safeGet(null) { sp.getString(K_PRIV, null) }
+        set(v) = safeSet { sp.edit().putString(K_PRIV, v).apply() }
 
     var deviceId: String?
-        get() = sp.getString(K_ID, null)
-        set(v) = sp.edit().putString(K_ID, v).apply()
+        get() = safeGet(null) { sp.getString(K_ID, null) }
+        set(v) = safeSet { sp.edit().putString(K_ID, v).apply() }
 
     var token: String?
-        get() = sp.getString(K_TOKEN, null)
-        set(v) = sp.edit().putString(K_TOKEN, v).apply()
+        get() = safeGet(null) { sp.getString(K_TOKEN, null) }
+        set(v) = safeSet { sp.edit().putString(K_TOKEN, v).apply() }
 
     var addressV4: String?
-        get() = sp.getString(K_V4, null)
-        set(v) = sp.edit().putString(K_V4, v).apply()
+        get() = safeGet(null) { sp.getString(K_V4, null) }
+        set(v) = safeSet { sp.edit().putString(K_V4, v).apply() }
 
     var addressV6: String?
-        get() = sp.getString(K_V6, null)
-        set(v) = sp.edit().putString(K_V6, v).apply()
+        get() = safeGet(null) { sp.getString(K_V6, null) }
+        set(v) = safeSet { sp.edit().putString(K_V6, v).apply() }
 
     var peerPublicKey: String?
-        get() = sp.getString(K_PEER, null)
-        set(v) = sp.edit().putString(K_PEER, v).apply()
+        get() = safeGet(null) { sp.getString(K_PEER, null) }
+        set(v) = safeSet { sp.edit().putString(K_PEER, v).apply() }
 
     var endpoint: String?
-        get() = sp.getString(K_ENDPOINT, null)
-        set(v) = sp.edit().putString(K_ENDPOINT, v).apply()
+        get() = safeGet(null) { sp.getString(K_ENDPOINT, null) }
+        set(v) = safeSet { sp.edit().putString(K_ENDPOINT, v).apply() }
 
     /**
      * Endpoint pilihan pengguna ("host:port"), diisi lewat layar utama.
@@ -56,28 +92,28 @@ class Prefs(context: Context) {
      * registrasi.
      */
     var manualEndpoint: String?
-        get() = sp.getString(K_MANUAL_EP, null)
-        set(v) = sp.edit().putString(K_MANUAL_EP, v).apply()
+        get() = safeGet(null) { sp.getString(K_MANUAL_EP, null) }
+        set(v) = safeSet { sp.edit().putString(K_MANUAL_EP, v).apply() }
 
     /** Kandidat anycast hasil DoH terakhir (dipisah koma); null/kosong = daftar statis. */
     var dohCandidates: String?
-        get() = sp.getString(K_DOH_EP, null)
-        set(v) = sp.edit().putString(K_DOH_EP, v).apply()
+        get() = safeGet(null) { sp.getString(K_DOH_EP, null) }
+        set(v) = safeSet { sp.edit().putString(K_DOH_EP, v).apply() }
 
     /** Kapan kandidat DoH terakhir diambil (epoch ms); basi setelah 24 jam. */
     var dohCandidatesAt: Long
-        get() = sp.getLong(K_DOH_AT, 0L)
-        set(v) = sp.edit().putLong(K_DOH_AT, v).apply()
+        get() = safeGet(0L) { sp.getLong(K_DOH_AT, 0L) }
+        set(v) = safeSet { sp.edit().putLong(K_DOH_AT, v).apply() }
 
     /** Endpoint tercepat hasil proba (null = pakai endpoint registrasi). */
     var speedEndpoint: String?
-        get() = sp.getString(K_SPEED_EP, null)
-        set(v) = sp.edit().putString(K_SPEED_EP, v).apply()
+        get() = safeGet(null) { sp.getString(K_SPEED_EP, null) }
+        set(v) = safeSet { sp.edit().putString(K_SPEED_EP, v).apply() }
 
     /** Waktu proba terakhir (epoch ms); basi setelah 1 jam. */
     var speedEndpointAt: Long
-        get() = sp.getLong(K_SPEED_AT, 0L)
-        set(v) = sp.edit().putLong(K_SPEED_AT, v).apply()
+        get() = safeGet(0L) { sp.getLong(K_SPEED_AT, 0L) }
+        set(v) = safeSet { sp.edit().putLong(K_SPEED_AT, v).apply() }
 
     /**
      * Endpoint yang **terbukti** menghasilkan handshake di perangkat ini.
@@ -87,13 +123,13 @@ class Prefs(context: Context) {
      * ketika endpoint tersebut justru gagal handshake.
      */
     var workingEndpoint: String?
-        get() = sp.getString(K_WORKING_EP, null)
-        set(v) = sp.edit().putString(K_WORKING_EP, v).apply()
+        get() = safeGet(null) { sp.getString(K_WORKING_EP, null) }
+        set(v) = safeSet { sp.edit().putString(K_WORKING_EP, v).apply() }
 
     /** Hasil uji trace terakhir (`null` = belum pernah diuji). Bertahan lintas restart. */
     var lastTest: VelumTestResult?
-        get() = VelumTestResult.decode(sp.getString(K_LAST_TEST, null))
-        set(v) = sp.edit().putString(K_LAST_TEST, v?.encode()).apply()
+        get() = safeGet(null) { VelumTestResult.decode(sp.getString(K_LAST_TEST, null)) }
+        set(v) = safeSet { sp.edit().putString(K_LAST_TEST, v?.encode()).apply() }
 
     /**
      * Endpoint efektif: pilihan **manual** pengguna, lalu yang terbukti bekerja, lalu
@@ -105,18 +141,18 @@ class Prefs(context: Context) {
 
     /** Paket aplikasi yang dikecualikan dari tunnel (split tunneling). */
     var excludedApps: Set<String>
-        get() = sp.getStringSet(K_EXCLUDED, null)?.toSet() ?: emptySet()
-        set(v) = sp.edit().putStringSet(K_EXCLUDED, v).apply()
+        get() = safeGet(emptySet()) { sp.getStringSet(K_EXCLUDED, null)?.toSet() ?: emptySet() }
+        set(v) = safeSet { sp.edit().putStringSet(K_EXCLUDED, v).apply() }
 
     /** Memo: akun terkonfirmasi memakai flag WARP penuh (set oleh registrasi/ensure). */
     var warpEnabled: Boolean
-        get() = sp.getBoolean(K_WARP, false)
-        set(v) = sp.edit().putBoolean(K_WARP, v).apply()
+        get() = safeGet(false) { sp.getBoolean(K_WARP, false) }
+        set(v) = safeSet { sp.edit().putBoolean(K_WARP, v).apply() }
 
     /** Memo: terakhir kali tunnel memang UP (untuk sambung ulang saat boot). */
     var wasUp: Boolean
-        get() = sp.getBoolean(K_WAS_UP, false)
-        set(v) = sp.edit().putBoolean(K_WAS_UP, v).apply()
+        get() = safeGet(false) { sp.getBoolean(K_WAS_UP, false) }
+        set(v) = safeSet { sp.edit().putBoolean(K_WAS_UP, v).apply() }
 
     /**
      * Menetapkan memo lifecycle secara durabel. Nilai ini menentukan apakah boot/recovery
@@ -124,8 +160,17 @@ class Prefs(context: Context) {
      * jalur pembatalan atau keberhasilan koneksi.
      */
     @SuppressLint("ApplySharedPref")
-    fun setWasUpDurable(value: Boolean): Boolean =
-        sp.edit().putBoolean(K_WAS_UP, value).commit()
+    fun setWasUpDurable(value: Boolean): Boolean {
+        return try {
+            sp.edit().putBoolean(K_WAS_UP, value).commit()
+        } catch (e: Exception) {
+            VelumLog.w(TAG, "gagal menulis wasUp durabel", e)
+            if (isKeystoreFailure(e)) {
+                synchronized(Companion) { instance = null }
+            }
+            false
+        }
+    }
 
     /**
      * Rekaman percobaan sambung ulang otomatis terakhir oleh [BootReceiver], dalam format
@@ -135,7 +180,7 @@ class Prefs(context: Context) {
      * dan maintainer membacanya dari layar diagnostik karena tidak punya adb.
      */
     val bootRecord: String?
-        get() = sp.getString(K_BOOT, null)
+        get() = safeGet(null) { sp.getString(K_BOOT, null) }
 
     /**
      * Tulis rekaman boot secara **durabel** (`commit()`).
@@ -147,7 +192,14 @@ class Prefs(context: Context) {
      */
     @SuppressLint("ApplySharedPref")
     fun writeBootRecordDurable(value: String) {
-        sp.edit().putString(K_BOOT, value).commit()
+        try {
+            sp.edit().putString(K_BOOT, value).commit()
+        } catch (e: Exception) {
+            VelumLog.w(TAG, "gagal menulis boot record durabel", e)
+            if (isKeystoreFailure(e)) {
+                synchronized(Companion) { instance = null }
+            }
+        }
     }
 
     /**
@@ -161,7 +213,7 @@ class Prefs(context: Context) {
      * "belum ada percobaan" — membingungkan, tetapi tidak merusak apa pun.
      */
     fun writeBootRecord(value: String) {
-        sp.edit().putString(K_BOOT, value).apply()
+        safeSet { sp.edit().putString(K_BOOT, value).apply() }
     }
 
     /** Registrasi dianggap lengkap bila semua bidang inti tersedia. */
@@ -184,18 +236,27 @@ class Prefs(context: Context) {
      */
     @SuppressLint("ApplySharedPref")
     fun saveRegistration(r: VelumRegistration.Result, privateKeyBase64: String) {
-        sp.edit()
-            .putString(K_PRIV, privateKeyBase64)
-            .putString(K_ID, r.id)
-            .putString(K_TOKEN, r.token)
-            .putString(K_V4, r.addressV4)
-            // null di sini menghapus kunci lama: alamat IPv6 sesi sebelumnya tidak boleh
-            // tertinggal menempel pada kunci yang baru.
-            .putString(K_V6, r.addressV6)
-            .putString(K_PEER, r.peerPublicKey)
-            .putString(K_ENDPOINT, r.endpoint)
-            .putBoolean(K_WARP, true) // body registrasi memang meminta warp_enabled
-            .commit()
+        try {
+            sp.edit()
+                .putString(K_PRIV, privateKeyBase64)
+                .putString(K_ID, r.id)
+                .putString(K_TOKEN, r.token)
+                .putString(K_V4, r.addressV4)
+                // null di sini menghapus kunci lama: alamat IPv6 sesi sebelumnya tidak boleh
+                // tertinggal menempel pada kunci yang baru.
+                .putString(K_V6, r.addressV6)
+                .putString(K_PEER, r.peerPublicKey)
+                .putString(K_ENDPOINT, r.endpoint)
+                .putBoolean(K_WARP, true) // body registrasi memang meminta warp_enabled
+                .commit()
+        } catch (e: Exception) {
+            VelumLog.w(TAG, "gagal menyimpan registrasi", e)
+            if (isKeystoreFailure(e)) {
+                synchronized(Companion) { instance = null }
+                throw KeystoreUnavailableException(e)
+            }
+            throw e
+        }
     }
 
     /**
@@ -223,16 +284,24 @@ class Prefs(context: Context) {
      */
     @SuppressLint("ApplySharedPref")
     fun clear() {
-        val keepUp = wasUp
-        val keepExcluded = excludedApps
-        val keepBoot = bootRecord
-        val keepManual = manualEndpoint
-        val ed = sp.edit().clear()
-        if (keepUp) ed.putBoolean(K_WAS_UP, true)
-        if (keepExcluded.isNotEmpty()) ed.putStringSet(K_EXCLUDED, keepExcluded)
-        if (keepBoot != null) ed.putString(K_BOOT, keepBoot)
-        if (keepManual != null) ed.putString(K_MANUAL_EP, keepManual)
-        ed.commit()
+        try {
+            val keepUp = wasUp
+            val keepExcluded = excludedApps
+            val keepBoot = bootRecord
+            val keepManual = manualEndpoint
+            val ed = sp.edit().clear()
+            if (keepUp) ed.putBoolean(K_WAS_UP, true)
+            if (keepExcluded.isNotEmpty()) ed.putStringSet(K_EXCLUDED, keepExcluded)
+            if (keepBoot != null) ed.putString(K_BOOT, keepBoot)
+            if (keepManual != null) ed.putString(K_MANUAL_EP, keepManual)
+            ed.commit()
+        } catch (e: Exception) {
+            VelumLog.w(TAG, "gagal clear prefs", e)
+            if (isKeystoreFailure(e)) {
+                synchronized(Companion) { instance = null }
+                throw KeystoreUnavailableException(e)
+            }
+        }
     }
 
     companion object {
@@ -325,7 +394,15 @@ class Prefs(context: Context) {
         /** Menghapus berkas terenkripsi yang sudah terbukti tidak bisa dibuka. */
         private fun deleteEncryptedFile(ctx: Context) {
             try {
-                File(File(ctx.applicationInfo.dataDir, "shared_prefs"), "$FILE.xml").delete()
+                val dir = File(ctx.applicationInfo.dataDir, "shared_prefs")
+                // EncryptedSharedPreferences bisa meninggalkan .bak saat commit gagal
+                // di tengah jalan; keduanya harus dihapus supaya percobaan buka ulang
+                // benar-benar mulai dari nol, bukan membaca backup yang juga rusak.
+                File(dir, "$FILE.xml").delete()
+                File(dir, "$FILE.xml.bak").delete()
+                // Beberapa versi androidx.security juga membuat file preferensi dengan
+                // suffix berbeda; hapus pola umum untuk kebersihan.
+                File(dir, "$FILE.xml.bak.1").delete()
             } catch (e: Exception) {
                 VelumLog.w(TAG, "gagal mengosongkan berkas prefs rusak", e)
             }

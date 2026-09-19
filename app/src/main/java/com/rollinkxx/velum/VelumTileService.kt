@@ -21,7 +21,9 @@ import java.util.concurrent.Executors
 class VelumTileService : TileService() {
 
     private val main = Handler(Looper.getMainLooper())
-    private val worker = Executors.newSingleThreadExecutor()
+    private val worker = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "velum-tile").apply { isDaemon = true }
+    }
 
     override fun onStartListening() {
         super.onStartListening()
@@ -43,62 +45,75 @@ class VelumTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val app = applicationContext
-        worker.execute {
-            val prefs = Prefs.of(app)
-            try {
-                // State lokal di-reset saat proses lahir ulang; backend adalah sumber
-                // kebenaran untuk menentukan aksi tile, bukan nilai default DOWN.
-                VelumTunnel.refreshState(app)
-                val wasUp = VelumTunnel.state == Tunnel.State.UP
-                if (!wasUp && VpnService.prepare(app) != null) {
-                    // Belum ada persetujuan VPN: hanya aplikasi yang bisa memintanya.
+        try {
+            worker.execute {
+                val prefs = try {
+                    Prefs.of(app)
+                } catch (e: KeystoreUnavailableException) {
+                    VelumLog.w(TAG, "aksi ubin dibatalkan: penyimpanan aman tidak tersedia", e)
+                    // Tanpa penyimpanan aman tidak ada aksi yang sah; buka aplikasi
+                    // supaya dialog keystore bisa menjelaskan ke pengguna.
                     openApp()
                     updateTile()
                     return@execute
                 }
-                if (!wasUp && !prefs.isRegistered) {
-                    // Belum terdaftar: registrasi butuh layar untuk menampilkan hasilnya.
-                    // Sengaja TIDAK menaikkan generasi niat di jalur ini — membuka aplikasi
-                    // bukan perubahan niat koneksi, dan menaikkannya di sini akan
-                    // membatalkan registrasi yang mungkin sedang berjalan di layar utama.
-                    openApp()
-                } else {
-                    // Niat baru dari pelaku ini, dicatat tepat sebelum tunnel disentuh.
-                    // Tanpa ini, ubin dan layar utama saling menimpa `wasUp` dan
-                    // hidup/matinya pemantau: pengguna memutus lewat ubin, lalu ekor
-                    // `connect()` milik layar menulis `wasUp = true` + menyalakan pemantau
-                    // lagi, dan tunnel yang baru dimatikan membangkitkan dirinya sendiri
-                    // pada peristiwa jaringan berikutnya.
-                    if (wasUp) {
-                        VelumTunnel.cancelIntent(prefs)
-                        ReconnectMonitor.stop(app)
-                        VelumTunnel.down(app)
+                try {
+                    // State lokal di-reset saat proses lahir ulang; backend adalah sumber
+                    // kebenaran untuk menentukan aksi tile, bukan nilai default DOWN.
+                    VelumTunnel.refreshState(app)
+                    val wasUp = VelumTunnel.state == Tunnel.State.UP
+                    if (!wasUp && VpnService.prepare(app) != null) {
+                        // Belum ada persetujuan VPN: hanya aplikasi yang bisa memintanya.
+                        openApp()
+                        updateTile()
+                        return@execute
+                    }
+                    if (!wasUp && !prefs.isRegistered) {
+                        // Belum terdaftar: registrasi butuh layar untuk menampilkan hasilnya.
+                        // Sengaja TIDAK menaikkan generasi niat di jalur ini — membuka aplikasi
+                        // bukan perubahan niat koneksi, dan menaikkannya di sini akan
+                        // membatalkan registrasi yang mungkin sedang berjalan di layar utama.
+                        openApp()
                     } else {
-                        val gen = VelumTunnel.bumpIntent()
-                        // Proba endpoint bisa makan ~6 detik: niat pengguna bisa berubah di
-                        // dalamnya, jadi diperiksa ulang tepat sebelum tunnel disentuh.
-                        EndpointProbe.refresh(prefs)
-                        if (VelumTunnel.intentStale(gen)) {
-                            VelumLog.i(TAG, "aksi ubin (sambung) dibatalkan: ada niat yang lebih baru")
+                        // Niat baru dari pelaku ini, dicatat tepat sebelum tunnel disentuh.
+                        // Tanpa ini, ubin dan layar utama saling menimpa `wasUp` dan
+                        // hidup/matinya pemantau: pengguna memutus lewat ubin, lalu ekor
+                        // `connect()` milik layar menulis `wasUp = true` + menyalakan pemantau
+                        // lagi, dan tunnel yang baru dimatikan membangkitkan dirinya sendiri
+                        // pada peristiwa jaringan berikutnya.
+                        if (wasUp) {
+                            VelumTunnel.cancelIntent(prefs)
+                            ReconnectMonitor.stop(app)
+                            VelumTunnel.down(app)
                         } else {
-                            if (VelumConnectionContract.connect(app, prefs) { VelumTunnel.intentStale(gen) } &&
-                                VelumTunnel.markUpIfCurrent(prefs, gen)
-                            ) {
-                                ReconnectMonitor.ensure(app)
+                            val gen = VelumTunnel.bumpIntent()
+                            // Proba endpoint bisa makan ~6 detik: niat pengguna bisa berubah di
+                            // dalamnya, jadi diperiksa ulang tepat sebelum tunnel disentuh.
+                            EndpointProbe.refresh(prefs)
+                            if (VelumTunnel.intentStale(gen)) {
+                                VelumLog.i(TAG, "aksi ubin (sambung) dibatalkan: ada niat yang lebih baru")
                             } else {
-                                if (VelumTunnel.clearUpIfCurrent(prefs, gen)) {
-                                    runCatching { VelumTunnel.down(app) }
-                                    ReconnectMonitor.stop(app)
+                                if (VelumConnectionContract.connect(app, prefs) { VelumTunnel.intentStale(gen) } &&
+                                    VelumTunnel.markUpIfCurrent(prefs, gen)
+                                ) {
+                                    ReconnectMonitor.ensure(app)
+                                } else {
+                                    if (VelumTunnel.clearUpIfCurrent(prefs, gen)) {
+                                        runCatching { VelumTunnel.down(app) }
+                                        ReconnectMonitor.stop(app)
+                                    }
+                                    VelumLog.w(TAG, "aksi ubin sambung gagal: handshake tidak terbukti")
                                 }
-                                VelumLog.w(TAG, "aksi ubin sambung gagal: handshake tidak terbukti")
                             }
                         }
                     }
+                } catch (e: Exception) {
+                    VelumLog.w(TAG, "aksi ubin gagal", e)
                 }
-            } catch (e: Exception) {
-                VelumLog.w(TAG, "aksi ubin gagal", e)
+                updateTile()
             }
-            updateTile()
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            VelumLog.i(TAG, "aksi ubin dilewati: worker sudah dimatikan")
         }
     }
 
@@ -112,9 +127,15 @@ class VelumTileService : TileService() {
     }
 
     private fun refreshTileState() {
-        worker.execute {
-            runCatching { VelumTunnel.refreshState(applicationContext) }
-            updateTile()
+        try {
+            worker.execute {
+                runCatching { VelumTunnel.refreshState(applicationContext) }
+                updateTile()
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // Service sudah dimatikan (onDestroy memanggil shutdown), dan sistem
+            // masih memanggil onStartListening sesaat setelahnya — jangan crash.
+            VelumLog.i(TAG, "refresh tile dilewati: worker sudah dimatikan")
         }
     }
 

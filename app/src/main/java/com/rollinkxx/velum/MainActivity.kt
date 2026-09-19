@@ -45,7 +45,9 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
     private lateinit var endpointRow: View
     private lateinit var endpointSub: TextView
     /** Penyambungan ulang sesudah endpoint manual disimpan (pola layar pengecualian). */
-    private val endpointWorker = Executors.newSingleThreadExecutor()
+    private val endpointWorker = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "velum-endpoint").apply { isDaemon = true }
+    }
     private lateinit var infoDuration: TextView
     private lateinit var infoEndpoint: TextView
     private lateinit var infoTest: TextView
@@ -252,7 +254,12 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
      * menghapus pilihan manual dan mengembalikan pemilihan otomatis.
      */
     private fun showEndpointDialog() {
-        val prefs = Prefs.of(this)
+        val prefs = try {
+            Prefs.of(this)
+        } catch (e: KeystoreUnavailableException) {
+            Toast.makeText(this, R.string.err_keystore, Toast.LENGTH_LONG).show()
+            return
+        }
         val input = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             hint = getString(R.string.endpoint_hint)
@@ -298,7 +305,12 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
      * pengguna di tengah jalan), pola yang sama dengan penyimpanan pengecualian aplikasi.
      */
     private fun applyManualEndpoint(value: String?) {
-        val prefs = Prefs.of(this)
+        val prefs = try {
+            Prefs.of(this)
+        } catch (e: KeystoreUnavailableException) {
+            Toast.makeText(this, R.string.err_keystore, Toast.LENGTH_LONG).show()
+            return
+        }
         if (prefs.manualEndpoint == value) {
             Toast.makeText(
                 this,
@@ -311,19 +323,23 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
         refreshStaticInfo()
         if (controller.state == Tunnel.State.UP) {
             Toast.makeText(this, R.string.endpoint_saved_restarting, Toast.LENGTH_SHORT).show()
-            endpointWorker.execute {
-                try {
-                    if (!VelumConnectionContract.reconnect(
-                            applicationContext,
-                            prefs,
-                            VelumConnectionContract.HANDSHAKE_WAIT_MS
-                        ) { !prefs.wasUp }
-                    ) {
-                        VelumLog.w(TAG, "endpoint manual tidak menghasilkan handshake")
+            try {
+                endpointWorker.execute {
+                    try {
+                        if (!VelumConnectionContract.reconnect(
+                                applicationContext,
+                                prefs,
+                                VelumConnectionContract.HANDSHAKE_WAIT_MS
+                            ) { !prefs.wasUp }
+                        ) {
+                            VelumLog.w(TAG, "endpoint manual tidak menghasilkan handshake")
+                        }
+                    } catch (e: Exception) {
+                        VelumLog.w(TAG, "gagal menyambungkan ulang setelah endpoint manual disimpan", e)
                     }
-                } catch (e: Exception) {
-                    VelumLog.w(TAG, "gagal menyambungkan ulang setelah endpoint manual disimpan", e)
                 }
+            } catch (_: java.util.concurrent.RejectedExecutionException) {
+                VelumLog.i(TAG, "reconnect endpoint manual dilewati: worker sudah dimatikan")
             }
         } else {
             Toast.makeText(
@@ -341,32 +357,40 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
      */
     private fun copyDiagnostics() {
         controller.runStats { stats ->
+            // Satu kali buka Prefs, bukan 5 kali — mengurangi risiko keystore
+            // gagal di tengah penyusunan snapshot dan menghindari dekripsi berulang.
+            val prefs = try {
+                Prefs.of(this)
+            } catch (e: KeystoreUnavailableException) {
+                Toast.makeText(this, R.string.err_keystore, Toast.LENGTH_LONG).show()
+                return@runStats
+            }
             val up = controller.state == Tunnel.State.UP
             val snapshot = VelumDiagnostics.Snapshot(
                 appVersion = appVersionName(),
                 state = getString(if (up) R.string.status_connected else R.string.status_disconnected),
-                endpoint = Prefs.of(this).effectiveEndpoint,
+                endpoint = prefs.effectiveEndpoint,
                 handshakeAgeSec = stats?.latestHandshakeMs
                     ?.takeIf { it > 0L }
                     ?.let { (System.currentTimeMillis() - it) / 1000 },
                 rxBytes = stats?.rxBytes ?: 0L,
                 txBytes = stats?.txBytes ?: 0L,
                 connectedSec = if (up) connectedMs() / 1000 else 0L,
-                excludedApps = Prefs.of(this).excludedApps.toList(),
+                excludedApps = prefs.excludedApps.toList(),
                 // Ikut disertakan: tanpa ini laporan gangguan dari perangkat hanya memuat
                 // keadaan saat itu, bukan alasan uji terakhir gagal.
-                lastTest = renderTest(Prefs.of(this).lastTest),
+                lastTest = renderTest(prefs.lastTest),
                 // Keadaan internal — ditambahkan 2026-09-13 atas persetujuan maintainer
                 // karena pengujian dilakukan di perangkat TANPA adb. Baris-baris ini yang
                 // mengubah uji konkurensi dan daya tahan proses dari "tidak bisa diperiksa"
                 // menjadi "cukup dilihat". `Process.getStartElapsedRealtime()` ada sejak
                 // API 24 (minSdk repo ini 24), jadi tanpa guard versi.
-                wasUp = Prefs.of(this).wasUp,
+                wasUp = prefs.wasUp,
                 intentGen = VelumTunnel.currentIntent,
                 monitorActive = ReconnectMonitor.isActive,
                 processAgeSec = (SystemClock.elapsedRealtime() -
                     android.os.Process.getStartElapsedRealtime()) / 1000,
-                boot = VelumDiagnostics.decodeBoot(Prefs.of(this).bootRecord),
+                boot = VelumDiagnostics.decodeBoot(prefs.bootRecord),
                 nowEpochMs = System.currentTimeMillis()
             )
             val clipboard = getSystemService(android.content.ClipboardManager::class.java)
@@ -479,7 +503,17 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
     }
 
     override fun refreshStaticInfo() {
-        val prefs = Prefs.of(this)
+        val prefs = try {
+            Prefs.of(this)
+        } catch (e: KeystoreUnavailableException) {
+            // Penyimpanan aman gagal: tampilkan placeholder, jangan crash.
+            // Dialog keystore sudah ditangani di onCreate; di sini hanya untuk
+            // jalur yang bisa dipanggil setelah itu (mis. setelah rotasi).
+            setTextIfChanged(infoEndpoint, getString(R.string.value_none))
+            setTextIfChanged(infoTest, getString(R.string.value_none))
+            endpointSub.setText(R.string.sub_endpoint_manual)
+            return
+        }
         setTextIfChanged(infoEndpoint, prefs.effectiveEndpoint ?: getString(R.string.value_none))
         setTextIfChanged(infoTest, renderTest(prefs.lastTest))
         // Subjudul baris endpoint menunjukkan nilai manualnya bila diisi — keputusan

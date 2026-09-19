@@ -269,7 +269,7 @@ object VelumTunnel : Tunnel {
 
     private fun buildConfig(prefs: Prefs): Config {
         val addresses = buildString {
-            append(prefs.addressV4).append("/32")
+            append(requireNotNull(prefs.addressV4)).append("/32")
             prefs.addressV6?.takeIf { it.isNotEmpty() }?.let { append(", ").append(it).append("/128") }
         }
         val ifaceBuilder = Interface.Builder()

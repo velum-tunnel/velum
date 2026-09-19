@@ -123,7 +123,11 @@ object VelumFormat {
 
     /** Apakah [host] literal IPv4 atau IPv6 (bukan nama domain). */
     fun isIpLiteral(host: String): Boolean {
-        val isV4 = host.all { it.isDigit() || it == '.' } && host.count { it == '.' } == 3
+        // IPv4 harus SAH (oktet 0-255, tanpa nol di depan) — sebelumnya hanya
+        // memeriksa "digit dan titik" sehingga "999.999.999.999" dianggap literal
+        // dan dipasang sebagai speedEndpoint, yang kemudian gagal di WireGuard
+        // tanpa pesan yang jelas. Pakai isIpv4 ketat untuk jalur ini.
+        val isV4 = isIpv4(host)
         val isV6 = host.contains(":") && host.count { it == ':' } > 1
         return isV4 || isV6
     }

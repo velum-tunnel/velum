@@ -39,16 +39,24 @@ object EndpointProbe {
     private const val DOH_FRESH_MS = 86_400_000L
 
     /**
-     * Ukuran pool MENGIKUTI jumlah kandidat, bukan angka tetap yang ditulis tangan.
+     * Ukuran pool MENGIKUTI jumlah kandidat maksimum, bukan angka tetap yang ditulis tangan.
      *
      * Sebelumnya `MAX_PROBE_THREADS = 8` sementara kandidat ada 7 (+1 endpoint registrasi)
-     * — pas-pasan, dan tidak ada yang menegakkan hubungan itu. Menambah satu kandidat saja
+     * - pas-pasan, dan tidak ada yang menegakkan hubungan itu. Menambah satu kandidat saja
      * membuat tugas kesembilan mengantre di `LinkedBlockingQueue`, tidak sempat berjalan
-     * dalam anggaran 6 detik, lalu dibatalkan **diam-diam**: proba tampak berhasil padahal
+     * dalam anggaran 6 detik, lalu dibatalkan diam-diam: proba tampak berhasil padahal
      * sebagian kandidat tidak pernah diukur, dan endpoint "tercepat" dipilih dari data
      * yang tidak lengkap.
+     *
+     * DoH bisa mengembalikan hingga [VelumDoh.MAX_STORED] (12) kandidat, ditambah endpoint
+     * registrasi = 13. Pool 8 thread tidak cukup - 5 tugas mengantre dan bisa timeout.
+     * 16 thread aman untuk skenario terburuk dan masih ringan (thread daemon, mati sendiri).
      */
-    private val probeThreads = VelumUpstream.CANDIDATES.size + 1
+    private val probeThreads = maxOf(
+        VelumUpstream.CANDIDATES.size + 1,
+        VelumDoh.MAX_STORED + 1,
+        16
+    )
 
 
     /**
@@ -93,7 +101,7 @@ object EndpointProbe {
      *
      * Keputusannya sendiri ada di [VelumEndpointChoice] (murni, teruji unit); fungsi ini
      * hanya mengukur, memasang hasilnya ke [Prefs], dan melaporkan apa yang benar-benar
-     * terjadi. Blocking ≤ ~6 detik. Tidak pernah melempar.
+     * terjadi. Blocking <= ~6 detik. Tidak pernah melempar.
      *
      * @return true HANYA bila endpoint efektif benar-benar berpindah. `false` berarti uji
      *   ulang akan memakai host yang sama, dan pemanggil tidak boleh berkata sebaliknya.
@@ -145,7 +153,7 @@ object EndpointProbe {
     }
 
     /**
-     * Pool bersama bert thread daemon (menganggur → mati sendiri) supaya tidak membuat
+     * Pool bersama bert thread daemon (menganggur -> mati sendiri) supaya tidak membuat
      * dan membuang sampai 8 thread setiap kali pengguna menekan Sambungkan.
      */
     private val pool: ExecutorService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -161,12 +169,12 @@ object EndpointProbe {
 
     /**
      * Host terurut dari tercepat (endpoint registrasi + kandidat anycast); kosong bila
-     * proba gagal total. Blocking ≤ ~6 detik.
+     * proba gagal total. Blocking <= ~6 detik.
      *
      * Diekspos untuk jalur verifikasi handshake di [VelumController]: pengukuran
      * dilakukan SEKALI per rotasi, lalu kandidat dipasang satu per satu lewat
      * [applyCandidate] sampai ada yang lolos handshake. (Jalur `rotate` yang lama
-     * mengukur ulang pada SETIAP percobaan fallback — hingga 3 × 6 detik.)
+     * mengukur ulang pada SETIAP percobaan fallback — hingga 3 x 6 detik.)
      */
     fun measureRanked(prefs: Prefs): List<String> = measure(prefs)
 
@@ -241,7 +249,7 @@ object EndpointProbe {
         return d.changed
     }
 
-    /** Host terurut dari tercepat; kosong bila semua gagal. Blocking ≤ ~6 detik. */
+    /** Host terurut dari tercepat; kosong bila semua gagal. Blocking <= ~6 detik. */
     private fun measure(prefs: Prefs): List<String> {
         val hosts = LinkedHashSet<String>()
         prefs.endpoint?.let(VelumFormat::hostPart)?.takeIf { it.isNotEmpty() }?.let { hosts.add(it) }
