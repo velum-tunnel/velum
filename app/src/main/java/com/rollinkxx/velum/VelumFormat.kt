@@ -149,6 +149,10 @@ object VelumFormat {
         if (!s.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' || it == ':' }) return false
         if (s.contains(":::")) return false
         if (s.trim(':').isEmpty()) return false
+        // Tolak leading/trailing single colon seperti ":1:2:3" atau "1:2:3:"
+        // yang sebelumnya lolos — hanya "::" di awal/akhir yang valid (mis. "::1" atau "1::")
+        if (s.startsWith(":") && !s.startsWith("::")) return false
+        if (s.endsWith(":") && !s.endsWith("::")) return false
         // "::" boleh muncul maksimal sekali — "1::2::3" tidak sah
         var idx = s.indexOf("::")
         if (idx >= 0) {
