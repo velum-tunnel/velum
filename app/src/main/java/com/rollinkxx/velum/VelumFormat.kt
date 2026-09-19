@@ -213,7 +213,8 @@ object VelumFormat {
     private fun isDomainName(s: String): Boolean {
         if (s.isEmpty() || s.length > 253) return false
         return s.split('.').all { label ->
-            label.isNotEmpty() && !label.startsWith('-') && !label.endsWith('-') &&
+            label.isNotEmpty() && label.length <= 63 &&
+                !label.startsWith('-') && !label.endsWith('-') &&
                 label.all { it.isLetterOrDigit() || it == '-' || it == '_' }
         }
     }
