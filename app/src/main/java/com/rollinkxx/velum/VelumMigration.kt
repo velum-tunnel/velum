@@ -23,8 +23,12 @@ object VelumMigration {
                 is Long -> hasil[kunci] = nilai
                 is Float -> hasil[kunci] = nilai
                 is Set<*> -> {
-                    @Suppress("UNCHECKED_CAST")
-                    hasil[kunci] = nilai as Set<String>
+                    // Hanya salin bila semua elemen String — cegah ClassCastException
+                    // bila legacy berisi Set<Int> atau campuran
+                    val stringSet = nilai.filterIsInstance<String>().toSet()
+                    if (stringSet.size == nilai.size) {
+                        hasil[kunci] = stringSet
+                    }
                 }
                 else -> Unit // tipe tak dikenal: lewati, jangan ditulis sembarangan
             }
