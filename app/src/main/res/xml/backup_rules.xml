@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keep VPN registration credentials and private tunnel material out of legacy backup. -->
+<full-backup-content>
+    <exclude domain="root" path="." />
+</full-backup-content>

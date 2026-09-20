@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Velum stores VPN registration credentials and private tunnel material in
+    encrypted preferences. Do not copy application data to cloud backup or
+    device-to-device transfer; restoration on another device is not a safe
+    way to move a VPN identity.
+-->
+<data-extraction-rules>
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
+        <exclude domain="root" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+    </device-transfer>
+</data-extraction-rules>
