@@ -119,10 +119,10 @@ dependencies {
     // "deklarasikan apa yang Anda pakai". Versinya mengikuti rilis stabil terbaru yang
     // ditetapkan di version catalog, sehingga classpath tetap deterministik.
     implementation(libs.androidx.core)
-    // Fork lokal dari tunnel 1.0.20260102: GoBackend upstream memanggil startService()
-    // tetapi tidak pernah startForeground(), yang membuat VPN dapat dihentikan Android
-    // 8+ saat aplikasi berada di background. AAR ini hanya mengganti lifecycle Java;
-    // binary native WireGuard dan ABI tetap berasal dari upstream yang sama.
+    // Fork lokal dari tunnel 1.0.20260102: GoBackend upstream hanya memanggil
+    // startService(), sedangkan fork ini menambahkan startForeground() agar VPN tidak
+    // dihentikan Android 8+ saat aplikasi berada di background. AAR ini hanya mengganti
+    // lifecycle Java; binary native WireGuard dan ABI tetap berasal dari upstream yang sama.
     implementation(files("libs/tunnel-1.0.20260102-velum1.aar"))
     implementation(libs.androidx.security.crypto)
 

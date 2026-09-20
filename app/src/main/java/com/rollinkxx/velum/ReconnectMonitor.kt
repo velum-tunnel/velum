@@ -16,11 +16,10 @@ import java.util.concurrent.TimeUnit
  * Menjaga tunnel tetap tersambung saat konektivitas berubah (pindah Wi-Fi/data,
  * putus sesaat) dengan memantul tunnel sekali pakai backoff.
  *
- * Lingkup aplikasi, bukan Activity: tetap bekerja walau UI ditutup. Yang menahan proses
- * tetap hidup selama tunnel UP adalah **VPN yang aktif** (VpnService yang sudah
- * `establish()`), BUKAN layanan latar depan — `GoBackend` tidak pernah memanggil
- * `startForeground` (diverifikasi pada sumber upstream tag `1.0.20260102`), jadi jangan
- * menyandarkan penalaran tentang umur proses pada anggapan ada FGS.
+ * Lingkup aplikasi, bukan Activity: tetap bekerja walau UI ditutup. Tunnel memakai fork
+ * GoBackend yang memanggil `startForeground()` dari VpnService dan mendeklarasikan tipe
+ * foreground yang sesuai pada manifest; VPN aktif tetap menjadi sumber lifecycle utama,
+ * sedangkan notifikasi foreground menjaga service tetap diprioritaskan Android.
  * Aktif hanya bila diniatkan tersambung ([Prefs.wasUp]); putus manual menghentikannya.
  */
 object ReconnectMonitor {
