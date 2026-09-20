@@ -76,6 +76,12 @@ jobs:
           set -euo pipefail
           scripts/phase5/runtime.sh run_runtime_smoke_test "$VELUM_PACKAGE" "$VELUM_ACTIVITY" "$EVIDENCE_DIR/launch"
 
+      - name: Measure startup and memory baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/performance/measure_startup.sh "$VELUM_PACKAGE" "$VELUM_ACTIVITY" "$EVIDENCE_DIR/performance" 5
+
       - name: Capture runtime evidence
         if: always()
         shell: bash

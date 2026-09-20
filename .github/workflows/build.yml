@@ -47,6 +47,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Static security checks
+        run: scripts/audit/static_security_check.sh
+
       # Dijalankan lebih dulu: paling ringan, dan regresi logika (mis. false
       # negative "Belum lewat Velum") harus ketahuan sebelum waktu habis di APK.
       - name: Pengujian unit

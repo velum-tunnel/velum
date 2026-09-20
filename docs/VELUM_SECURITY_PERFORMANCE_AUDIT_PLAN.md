@@ -149,6 +149,14 @@ VPN RUNTIME QUALITY: UNVERIFIED
 
 Deliverable utama adalah laporan audit keamanan dan performa dengan daftar temuan yang diprioritaskan. Deliverable pendukung terdiri atas regression test, benchmark result, runtime evidence bundle, CI workflow, remediation commit, dan handoff document untuk agen berikutnya.
 
+## Status implementasi rencana
+
+Static security gate telah diimplementasikan melalui `scripts/audit/static_security_check.sh` dan ditambahkan ke workflow build. Pemeriksaan tersebut memverifikasi backup Android dinonaktifkan, permission VPN tetap dilindungi, cleartext traffic dilarang, logging sensitif melewati `VelumLog`, dan tidak ada material private key PEM di source atau script.
+
+Benchmark startup dan memori telah diimplementasikan melalui `scripts/performance/measure_startup.sh`. Benchmark membutuhkan tepat satu target ADB sehat, menghasilkan data mentah per iterasi, serta merangkum rata-rata, minimum, maksimum, median, dan p95. Benchmark dihubungkan ke workflow real-device setelah launch smoke test.
+
+Build debug, build preview dengan R8, unit test, lint, dan static security gate telah berhasil dijalankan secara lokal menggunakan JDK 17 dan Android SDK lokal. Validasi service VPN, interface, handshake, traffic, disconnect, reconnect, dan benchmark pada perangkat nyata masih **BLOCKED** sampai tersedia target Android sehat. Emulator boot atau APK launch saja tidak mengubah status tersebut menjadi PASS.
+
 ## Referensi
 
 [1]: https://developer.android.com/reference/android/net/VpnService "Android VpnService reference"
