@@ -40,6 +40,11 @@ jobs:
       - name: Verifikasi checksum tunnel WireGuard
         run: sha256sum --check third_party/wireguard-tunnel/SHA256SUMS
 
+      # Cegah regresi tap notifikasi: AAR vendor harus menunjuk ke Activity Java
+      # stabil, memakai PendingIntent immutable, dan mempertahankan fallback API lama.
+      - name: Verifikasi kontrak notifikasi VPN
+        run: tools/verify_notification_contract.sh
+
       - name: Setup JDK 17
         uses: actions/setup-java@v5
         with:

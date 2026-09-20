@@ -10,6 +10,8 @@ Audit menemukan satu masalah kompatibilitas pada refactor sebelumnya. `ServiceIn
 
 Masalah tersebut telah diperbaiki. Source kini memakai overload `startForeground(id, notification, type)` hanya ketika `SDK_INT >= 34`, dengan nilai tipe `1024` yang didefinisikan lokal agar source tidak merujuk langsung pada simbol API 34 saat dikompilasi terhadap API 33. Android 10–13 memakai overload dua argumen. `PendingIntent` notifikasi tetap immutable, eksplisit menuju `MainActivity`, dan menggunakan `FLAG_ACTIVITY_SINGLE_TOP | FLAG_ACTIVITY_CLEAR_TOP`.
 
+Audit lanjutan menemukan bug kedua pada varian build: `getPackageName() + ".MainActivity"` akan menghasilkan target yang salah pada `debug` dan `preview`, karena kedua varian menambahkan suffix pada `applicationId` sedangkan nama class Java tidak berubah. Target kini dikunci ke `com.rollinkxx.velum.MainActivity`, dengan package runtime tetap diambil dari `getPackageName()`.
+
 ## Bukti verifikasi
 
 | Target | Pengujian | Hasil |
@@ -19,6 +21,7 @@ Masalah tersebut telah diperbaiki. Source kini memakai overload `startForeground
 | Android 15 / API 35 | Kompilasi source `GoBackend.java` terhadap `android.jar` API 35 | LULUS |
 | Android 16 / API 36 | Kompilasi source `GoBackend.java` terhadap `android.jar` API 36 | LULUS |
 | Artifact AAR | Bytecode memuat `PendingIntent.getActivity()` dan `setContentIntent()` | LULUS |
+| Build variants | Target component tetap `com.rollinkxx.velum.MainActivity` pada debug/preview suffix | LULUS |
 | Security contract | Tidak ditemukan `FLAG_MUTABLE`, `setContentIntent(null)`, atau `setAutoCancel(true)` | LULUS |
 | Manifest merged preview | `MainActivity` exported dan `singleTask`; VPN service `exported=false`, `systemExempted` | LULUS |
 | Supply chain | `sha256sum --check third_party/wireguard-tunnel/SHA256SUMS` | LULUS |
