@@ -13,7 +13,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 - **Fallback penyimpanan polos dihapus total**: kunci privat tidak pernah lagi tersimpan
   tanpa enkripsi. Bila keystore gagal, aplikasi melempar `KeystoreUnavailableException`,
   menampilkan dialog "Penyimpanan aman tidak tersedia. Daftar ulang diperlukan.", lalu
-  berhenti; berkas prefs rusak dipulihkan sekali dengan mengosongkannya.
+  berhenti; prefs tidak dihapus atau di-reset otomatis.
 - **Certificate pinning** untuk `api.cloudflareclient.com` lewat
   `network_security_config` (SPKI enam CA penerbit Cloudflare dari log CT, kedaluwarsa
   2027-03-31 sebagai rembesan anti-brick); prosedur rotasi di `SECURITY.md`.

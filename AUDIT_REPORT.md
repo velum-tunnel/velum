@@ -14,6 +14,13 @@ tidak ada library mocking; hanya `BuildConfig` yang diaktifkan, satu kelas kecil
 > Perubahan runtime di perangkat nyata menunggu checklist `docs/uji-perangkat.md`
 > (D2, H7, H8) — tanpa emulator, klaim runtime tidak pernah berarti "teruji perangkat".
 
+> **Erratum audit 2026-09-20.** Tabel historis di bawah pernah mencatat self-heal
+> yang mengosongkan prefs terenkripsi ketika pembukaan gagal. Implementasi saat ini
+> sengaja **tidak** melakukan reset otomatis; `Prefs.open` melempar
+> `KeystoreUnavailableException` dan pemulihan kredensial harus menjadi tindakan
+> pengguna yang eksplisit. Catatan historis dipertahankan, tetapi klaim tersebut
+> tidak boleh dipakai sebagai deskripsi perilaku `main` saat ini.
+
 ---
 
 ## 🔴 P0 — Header Registrasi (BLOCKER) ✅
@@ -36,7 +43,7 @@ Commit: `0c0fa71` `fix: perbarui header registrasi WARP…`
 | # | Perubahan | Berkas |
 |---|---|---|
 | 1 | Seluruh cabang penyimpanan polos (`FILE_PLAIN`/`velum_plain`, penanda `plainFallback`, properti `isPlainFallback`) dihapus; `grep` memastikan nol sisa | `Prefs.kt` |
-| 2 | Kegagalan pembukaan keystore melempar **`KeystoreUnavailableException`** (baru). Self-heal: kegagalan PERTAMA (umumnya berkas prefs terenkripsi rusak → `create()` akan gagal selamanya) mengosongkan berkas yang memang sudah tak terbaca lalu mencoba ulang SEKALI — registrasi hilang tetapi aplikasi bisa mendaftar ulang; kegagalan kedua = keystore benar-benar tidak tersedia → lempar → **registrasi dipaksa ulang** | `Prefs.kt`, `KeystoreUnavailableException.kt` (baru) |
+| 2 | **Historis, superseded:** catatan lama pernah menyebut self-heal dengan mengosongkan prefs saat pembukaan gagal. Perilaku `main` saat ini sengaja tidak menghapus atau mereset prefs otomatis; kegagalan pembukaan melempar **`KeystoreUnavailableException`** dan pemulihan harus eksplisit oleh pengguna | `Prefs.kt`, `KeystoreUnavailableException.kt` |
 | 3 | Dialog UI modal: **"Penyimpanan aman tidak tersedia. Daftar ulang diperlukan."** lalu aplikasi menutup diri; inisialisasi `MainActivity` dijaga (`::controller.isInitialized`) agar jalur gagal tidak menyentuh komponen yang belum jadi. `AppExclusionActivity` menutup dengan Toast; `BootReceiver`/`ReconnectMonitor` berhenti tanpa tindakan otomatis; pesan error `VelumError.Kind.KEYSTORE` tidak menuduh jaringan | `MainActivity.kt`, `AppExclusionActivity.kt`, `BootReceiver.kt`, `ReconnectMonitor.kt`, `VelumController.kt`, `VelumError.kt`, `strings.xml` |
 | 4 | "Tidak ada file plaintext dibuat saat Keystore gagal" dijamin **struktural**: jalur pembuatan berkas polos tidak ada lagi di kode (diverifikasi grep, bukan hanya uji). Jalur `Prefs.open` memerlukan Android framework sehingga tidak bisa disimulasikan di unit test JVM repo ini — baris D2 `docs/uji-perangkat.md` + `VelumErrorTest.kindOf==KEYSTORE` menggantikannya | `VelumErrorTest.kt`, `docs/uji-perangkat.md` |
 

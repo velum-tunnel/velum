@@ -176,6 +176,10 @@ object VelumApi {
         val conn = URL(url).openConnection() as HttpURLConnection
         try {
             conn.requestMethod = method
+            // Endpoint API adalah kontrak tetap; jangan ikuti redirect otomatis.
+            // Selain menyamarkan perubahan endpoint, redirect dapat membawa header
+            // Authorization ke tujuan yang tidak dimaksudkan.
+            conn.instanceFollowRedirects = false
             conn.connectTimeout = 15000
             conn.readTimeout = 15000
             // Header API hidup di satu tempat (VelumUpstream.API_HEADERS) dan dijaga
