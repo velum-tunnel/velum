@@ -1,8 +1,8 @@
 diff --git a/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java b/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java
-index 196836d..235f770 100644
+index 196836d..c06a846 100644
 --- a/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java
 +++ b/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java
-@@ -5,12 +5,17 @@
+@@ -5,6 +5,10 @@
  
  package com.wireguard.android.backend;
  
@@ -13,23 +13,19 @@ index 196836d..235f770 100644
  import android.content.Context;
  import android.content.Intent;
  import android.os.Build;
- import android.os.ParcelFileDescriptor;
- import android.system.OsConstants;
- import android.util.Log;
-+import android.content.pm.ServiceInfo;
- 
- import com.wireguard.android.backend.BackendException.Reason;
- import com.wireguard.android.backend.Tunnel.State;
-@@ -380,6 +385,8 @@ public final class GoBackend implements Backend {
+@@ -380,6 +384,11 @@ public final class GoBackend implements Backend {
       */
      public static class VpnService extends android.net.VpnService {
          @Nullable private GoBackend owner;
 +        private static final int FOREGROUND_NOTIFICATION_ID = 0x564C;
 +        private static final String FOREGROUND_CHANNEL_ID = "velum_vpn";
++        // API 34 introduced this value; keeping the literal avoids linking the
++        // newer ServiceInfo symbol when compiling the library against API 33.
++        private static final int FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED = 1024;
  
          public Builder getBuilder() {
              return new Builder();
-@@ -389,6 +396,53 @@ public final class GoBackend implements Backend {
+@@ -389,6 +398,55 @@ public final class GoBackend implements Backend {
          public void onCreate() {
              vpnService.complete(this);
              super.onCreate();
@@ -72,12 +68,14 @@ index 196836d..235f770 100644
 +                    .setOngoing(true)
 +                    .setCategory(Notification.CATEGORY_SERVICE)
 +                    .build();
-+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
++            if (Build.VERSION.SDK_INT >= 34) {
 +                startForeground(
 +                        FOREGROUND_NOTIFICATION_ID,
 +                        notification,
-+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED);
++                        FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED);
 +            } else {
++                // The systemExempted type was introduced in API 34. The two-argument
++                // overload is the compatible foreground path on Android 10-13.
 +                startForeground(FOREGROUND_NOTIFICATION_ID, notification);
 +            }
          }
