@@ -80,7 +80,7 @@ jobs:
         with:
           # `tools` sudah tidak tersedia di repository SDK modern; CodeQL hanya
           # memerlukan platform dan build tools untuk kompilasi yang direkam.
-          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+	          packages: "platform-tools platforms;android-37 build-tools;36.0.0"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
