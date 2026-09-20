@@ -18,13 +18,8 @@ object VelumConnectionContract {
         prefs: Prefs,
         maxWaitMs: Long = HANDSHAKE_WAIT_MS,
         cancelled: () -> Boolean = { false }
-    ): Boolean {
-        if (cancelled()) return false
-        val baseline = VelumTunnel.traffic(context)?.latestHandshakeMs ?: 0L
+    ): Boolean = establishAndVerify(context, prefs, maxWaitMs, cancelled) {
         VelumTunnel.up(context, prefs)
-        val valid = verify(context, maxWaitMs, baseline, cancelled)
-        cleanupIfStillOwned(context, valid, cancelled)
-        return valid
     }
 
     /** Satu primitive restart endpoint: transisi atomik lalu handshake wajib. */
@@ -33,10 +28,27 @@ object VelumConnectionContract {
         prefs: Prefs,
         maxWaitMs: Long,
         cancelled: () -> Boolean = { false }
+    ): Boolean = establishAndVerify(context, prefs, maxWaitMs, cancelled) {
+        VelumTunnel.restart(context, prefs, shouldContinue = { !cancelled() })
+    }
+
+    /**
+     * Menjalankan transisi tunnel lalu memverifikasi handshake baru.
+     *
+     * Baseline handshake dan cleanup sengaja berada di satu tempat: `connect` dan
+     * `reconnect` sebelumnya memiliki dua salinan yang mudah tidak sinkron ketika
+     * aturan pembatalan atau teardown berubah.
+     */
+    private fun establishAndVerify(
+        context: Context,
+        prefs: Prefs,
+        maxWaitMs: Long,
+        cancelled: () -> Boolean,
+        establish: () -> Unit
     ): Boolean {
         if (cancelled()) return false
         val baseline = VelumTunnel.traffic(context)?.latestHandshakeMs ?: 0L
-        VelumTunnel.restart(context, prefs, shouldContinue = { !cancelled() })
+        establish()
         val valid = verify(context, maxWaitMs, baseline, cancelled)
         cleanupIfStillOwned(context, valid, cancelled)
         return valid

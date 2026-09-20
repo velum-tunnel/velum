@@ -401,7 +401,11 @@ class VelumController(context: Context, private val ui: Ui) {
             return false
         }
         if (hasil.winner == null) {
-            VelumLog.d(TAG, "rotasi tervalidasi: tidak ada kandidat yang lolos handshake (dicoba: ${hasil.attempted.size})")
+            VelumLog.d(
+                TAG,
+                "rotasi tervalidasi: tidak ada kandidat yang lolos handshake " +
+                    "(dicoba: ${hasil.attempted.size})"
+            )
             return false
         }
         VelumLog.d(TAG, "endpoint terverifikasi handshake: ${prefs.effectiveEndpoint} (${hasil.attempted.size} dicoba)")
