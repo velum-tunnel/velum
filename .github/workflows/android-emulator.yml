@@ -82,7 +82,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             adb devices -l
             adb wait-for-device
             adb shell getprop ro.build.version.sdk
