@@ -8,7 +8,7 @@
 
 Audit kedua tidak menemukan kerentanan kritis baru pada implementasi runtime. Beberapa area yang paling berisiko telah memiliki pengamanan yang tepat: service VPN memakai foreground lifecycle, surface manifest dibatasi, redirect API ditolak, respons jaringan dibatasi ukuran dan waktunya, kredensial disimpan melalui Keystore, dan kandidat endpoint tidak dipromosikan sebelum handshake WireGuard terbukti.
 
-Refactor runtime besar tidak direkomendasikan. Pada aplikasi VPN, perubahan besar pada lifecycle atau konkurensi tanpa perangkat nyata berisiko memperkenalkan regresi yang lebih serius daripada manfaat optimasi mikro. Perubahan yang diterapkan adalah hardening CI supply chain: checksum AAR WireGuard diubah dari path absolut menjadi path relatif, lalu diverifikasi sebelum Gradle build berjalan. Perubahan ini tidak menambah biaya runtime dan mencegah artifact lokal yang berubah atau korup masuk ke APK.
+Refactor runtime besar tidak direkomendasikan. Pada aplikasi VPN, perubahan besar pada lifecycle atau konkurensi tanpa perangkat nyata berisiko memperkenalkan regresi yang lebih serius daripada manfaat optimasi mikro. Perubahan yang diterapkan adalah hardening CI supply chain, penyelarasan dokumentasi foreground lifecycle, dan pemutakhiran CodeQL Action ke v4. Checksum AAR WireGuard diubah dari path absolut menjadi path relatif, lalu diverifikasi sebelum Gradle build berjalan. Perubahan ini tidak menambah biaya runtime dan mencegah artifact lokal yang berubah atau korup masuk ke APK.
 
 ## Temuan utama
 
@@ -30,13 +30,13 @@ Refactor runtime besar tidak direkomendasikan. Pada aplikasi VPN, perubahan besa
 
 Berkas `third_party/wireguard-tunnel/SHA256SUMS` sebelumnya memuat path absolut lingkungan sandbox. Format tersebut berhasil pada mesin pembuat artifact, tetapi gagal digunakan pada runner lain. Path kini menjadi `app/libs/tunnel-1.0.20260102-velum1.aar` sehingga `sha256sum --check` dapat dijalankan dari root repository.
 
-Workflow `.github/workflows/build.yml` kini memverifikasi checksum tersebut segera setelah checkout dan sebelum setup Gradle serta Android SDK. Dengan urutan ini, artifact yang berubah, rusak, atau tidak sesuai provenance akan menggagalkan pipeline sebelum kompilasi APK.
+Workflow `.github/workflows/build.yml` kini memverifikasi checksum tersebut segera setelah checkout dan sebelum setup Gradle serta Android SDK. Dengan urutan ini, artifact yang berubah, rusak, atau tidak sesuai provenance akan menggagalkan pipeline sebelum kompilasi APK. Komentar pada `app/build.gradle.kts` dan `ReconnectMonitor.kt` juga diselaraskan dengan fakta bahwa AAR fork memang memanggil `startForeground()`.
 
 ## Verifikasi yang dilakukan
 
-Pemeriksaan repository menunjukkan working tree awal bersih dan branch berada pada `main` yang mengikuti `origin/main`. Checksum AAR lokal cocok dengan nilai yang tercatat sebelum perubahan. Riwayat GitHub Actions terakhir yang tersedia untuk commit kode sebelumnya menunjukkan job `build`, `CodeQL`, dan dokumentasi berhasil.
+Pemeriksaan repository menunjukkan working tree final bersih pada commit `08e6bb9` dan branch mengikuti `origin/main`. Checksum AAR lokal cocok dengan nilai yang tercatat sebelum perubahan. Untuk commit final tersebut, GitHub Actions berhasil menyelesaikan unit test, build debug, build preview dengan R8, signed release build, verifikasi signature APK, checksum gate, dan CodeQL. CodeQL melaporkan tidak ada temuan keamanan; warning ikon launcher hanya bersifat kosmetik.
 
-Build lokal `testDebugUnitTest lintDebug assemblePreview` tidak dapat dijadikan bukti kegagalan kode karena sandbox ini tidak memiliki Android SDK atau `ANDROID_HOME` yang valid. Gradle berhenti pada resolusi `android.jar`. Ini adalah keterbatasan lingkungan eksekusi, bukan error kompilasi sumber. Verifikasi build Android harus dilakukan oleh GitHub Actions atau mesin yang memiliki platform `android-37.2` dan build tools `36.0.0`.
+Build lokal `testDebugUnitTest lintDebug assemblePreview` tidak dapat dijadikan bukti kegagalan kode karena sandbox ini tidak memiliki Android SDK atau `ANDROID_HOME` yang valid. Gradle berhenti pada resolusi `android.jar`. Ini adalah keterbatasan lingkungan eksekusi, bukan error kompilasi sumber. Verifikasi build Android dilakukan oleh GitHub Actions pada toolchain yang benar dan berhasil.
 
 ## Risiko tersisa sebelum rilis
 

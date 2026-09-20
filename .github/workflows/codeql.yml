@@ -62,7 +62,7 @@ jobs:
       # sesudahnya. Menaruh init setelah build menghasilkan basis data kosong
       # lagi — gejalanya sama persis dengan autobuild yang gagal.
       - name: Inisialisasi CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
 
@@ -93,6 +93,6 @@ jobs:
         run: ./gradlew --no-daemon --stacktrace assembleDebug --no-build-cache
 
       - name: Analisis CodeQL
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:java-kotlin"
