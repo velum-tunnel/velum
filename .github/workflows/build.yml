@@ -34,6 +34,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # AAR lokal adalah bagian dari supply chain aplikasi. Verifikasi checksum
+      # sebelum Gradle dijalankan agar artifact yang berubah atau korup tidak pernah
+      # masuk ke APK. Path pada SHA256SUMS sengaja relatif supaya portable di CI.
+      - name: Verifikasi checksum tunnel WireGuard
+        run: sha256sum --check third_party/wireguard-tunnel/SHA256SUMS
+
       - name: Setup JDK 17
         uses: actions/setup-java@v5
         with:
