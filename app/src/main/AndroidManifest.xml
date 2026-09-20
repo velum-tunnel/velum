@@ -60,12 +60,14 @@
         </service>
 
         <!-- Sambung ulang otomatis setelah boot DAN setelah aplikasi diperbarui (hanya bila
-             terakhir UP & izin VPN berlaku). MY_PACKAGE_REPLACED perlu karena pembaruan
-             mematikan proses, dan proses yang mati berarti tunnel ikut mati. -->
+             terakhir UP & izin VPN berlaku). Receiver tetap non-exported: sistem masih dapat
+             mengirim broadcast terlindungi, tetapi aplikasi lain tidak dapat memicu reconnect
+             secara eksplisit. MY_PACKAGE_REPLACED perlu karena pembaruan mematikan proses,
+             dan proses yang mati berarti tunnel ikut mati. -->
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
