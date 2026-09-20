@@ -519,8 +519,8 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
     override fun onDisconnectedVisual() {
         stopTicker()
         stopPulse()
-        // `StatusNotifier.hide` dipanggil oleh VelumTunnel saat status berubah, bukan di
-        // sini: layar bisa saja sudah tidak ada ketika tunnel mati di latar.
+        // Pembersihan notifikasi status lama dilakukan oleh VelumTunnel saat callback
+        // backend masuk, bukan di sini: layar bisa saja sudah tidak ada di latar.
         setTextIfChanged(infoDuration, getString(R.string.value_none))
         setTextIfChanged(infoData, getString(R.string.value_none))
         refreshAlwaysOn()

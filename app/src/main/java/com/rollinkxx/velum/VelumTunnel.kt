@@ -152,7 +152,10 @@ object VelumTunnel : Tunnel {
             }
             callback = listener.get()
         }
-        updateNotification(newState)
+        // Fork GoBackend sudah mem-posting notifikasi foreground wajib. Bersihkan hanya
+        // notifikasi status lama ID 42 agar upgrade dari versi sebelumnya tidak menyisakan
+        // dua notifikasi VPN; jangan membuat notifikasi kedua di sini.
+        appContext?.let(StatusNotifier::hide)
         callback?.invoke(newState)
         if (newState == Tunnel.State.DOWN) {
             val expected = consumeExpectedDown()
@@ -183,26 +186,6 @@ object VelumTunnel : Tunnel {
             val current = expectedDownTransitions.get()
             if (current <= 0) return false
             if (expectedDownTransitions.compareAndSet(current, current - 1)) return true
-        }
-    }
-
-    /**
-     * Notifikasi status mengikuti **tunnel**, bukan Activity.
-     *
-     * Sebelumnya `show`/`hide` hanya dipanggil dari callback visual layar utama, akibatnya:
-     * tunnel yang mati di latar (pantulan menyerah setelah 5 percobaan, atau diputus lewat
-     * ubin) meninggalkan notifikasi "Tersambung" yang basi selamanya, dan menyambung lewat
-     * ubin saat aplikasi tertutup tidak memunculkan notifikasi sama sekali.
-     *
-     * Aman dipanggil dari thread backend: `NotificationManager.notify` thread-safe, dan
-     * `StatusNotifier.show` sudah menelan `SecurityException` bila izin notifikasi ditolak.
-     */
-    private fun updateNotification(newState: Tunnel.State) {
-        val ctx = appContext ?: return
-        if (newState == Tunnel.State.UP) {
-            StatusNotifier.show(ctx)
-        } else {
-            StatusNotifier.hide(ctx)
         }
     }
 
