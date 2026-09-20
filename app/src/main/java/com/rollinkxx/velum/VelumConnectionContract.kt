@@ -47,7 +47,14 @@ object VelumConnectionContract {
         establish: () -> Unit
     ): Boolean {
         if (cancelled()) return false
-        val baseline = VelumTunnel.traffic(context)?.latestHandshakeMs ?: 0L
+        // Statistik backend bisa sementara null tepat setelah restart. Bila fallback ke 0L,
+        // handshake lama yang masih dikembalikan pada polling berikutnya dapat mengesahkan
+        // endpoint/sesi baru tanpa ada handshake baru. Waktu mulai sesi menjadi pagar kedua;
+        // timestamp handshake yang sah harus lebih baru dari keduanya.
+        val baseline = handshakeBaseline(
+            latestHandshakeMs = VelumTunnel.traffic(context)?.latestHandshakeMs,
+            nowEpochMs = System.currentTimeMillis()
+        )
         establish()
         val valid = verify(context, maxWaitMs, baseline, cancelled)
         cleanupIfStillOwned(context, valid, cancelled)
@@ -97,6 +104,10 @@ object VelumConnectionContract {
     /** Timestamp lama tidak boleh mengesahkan endpoint/sesi yang baru dibangun. */
     fun isFreshHandshake(latestHandshakeMs: Long, baselineHandshakeMs: Long): Boolean =
         latestHandshakeMs > 0L && latestHandshakeMs > baselineHandshakeMs
+
+    /** Baseline sesi baru; menutup celah ketika statistik lama masih terlihat setelah restart. */
+    fun handshakeBaseline(latestHandshakeMs: Long?, nowEpochMs: Long): Long =
+        maxOf(latestHandshakeMs ?: 0L, nowEpochMs)
 
     private fun cleanupIfStillOwned(context: Context, valid: Boolean, cancelled: () -> Boolean) {
         if (valid) return

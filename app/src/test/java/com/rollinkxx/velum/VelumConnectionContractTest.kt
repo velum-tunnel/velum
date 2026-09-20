@@ -104,6 +104,18 @@ class VelumConnectionContractTest {
     }
 
     @Test
+    fun baselineHandshakeMemakaiWaktuMulaiBilaStatistikBackendKosong() {
+        assertEquals(10_000L, VelumConnectionContract.handshakeBaseline(null, 10_000L))
+        assertFalse(VelumConnectionContract.isFreshHandshake(9_999L, 10_000L))
+    }
+
+    @Test
+    fun baselineHandshakeMempertahankanTimestampBackendYangLebihBaru() {
+        assertEquals(12_000L, VelumConnectionContract.handshakeBaseline(12_000L, 10_000L))
+        assertTrue(VelumConnectionContract.isFreshHandshake(12_001L, 12_000L))
+    }
+
+    @Test
     fun claimRecoveryTetapEksklusifSetelahReleaseBerulang() {
         val claim = VelumRecoveryClaim()
         assertTrue(claim.tryClaim())
