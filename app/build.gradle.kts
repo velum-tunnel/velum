@@ -116,8 +116,8 @@ dependencies {
     implementation(libs.androidx.activity)
     // Dipakai langsung oleh VelumInsets (ViewCompat/WindowInsetsCompat). Dideklarasikan
     // eksplisit supaya tidak bergantung pada salinan transitif dari appcompat/activity —
-    // "deklarasikan apa yang Anda pakai". Versinya 1.13.0, sama dengan yang sudah
-    // terselesaikan di graph, jadi classpath dan isi APK tidak berubah sama sekali.
+    // "deklarasikan apa yang Anda pakai". Versinya mengikuti rilis stabil terbaru yang
+    // ditetapkan di version catalog, sehingga classpath tetap deterministik.
     implementation(libs.androidx.core)
     implementation(libs.wireguard.tunnel)
     implementation(libs.androidx.security.crypto)

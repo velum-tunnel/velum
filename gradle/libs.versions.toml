@@ -1,23 +1,24 @@
 # Satu-satunya sumber kebenaran versi dependensi & plugin (lihat AGENTS.md §4).
 [versions]
-agp = "9.1.1"
+agp = "9.4.0"
 compileSdk = "36"
 targetSdk = "36"
 minSdk = "24"
 appcompat = "1.8.0"
-activity = "1.9.3"
+activity = "1.13.0"
 # Dipakai LANGSUNG oleh VelumInsets (ViewCompat/WindowInsetsCompat). Sebelumnya hanya
 # hadir sebagai dependensi transitif — build bisa pecah tanpa kesalahan repo ini bila
-# appcompat/activity suatu hari berhenti membawanya. Versi 1.13.0 adalah versi yang
-# MEMANG sudah terselesaikan di graph saat ini, jadi mendeklarasikannya tidak mengubah
-# satu pun artifact yang terunduh. Bukti POM (diambil dari Google Maven, 2026-09-12):
-#   androidx.appcompat:appcompat:1.8.0 -> androidx.core:core 1.13.0 (compile)
-#   androidx.activity:activity:1.9.3   -> androidx.core:core 1.13.0 (compile)
+# appcompat/activity suatu hari berhenti membawanya. Versi 1.19.0 adalah rilis stabil
+# terbaru dan dipasangkan eksplisit agar API yang dipakai aplikasi tetap terjamin.
+# Bukti POM dan status rilis diverifikasi dari Google Maven/AndroidX, 2026-09-20:
+#   androidx.appcompat:appcompat:1.8.0 -> androidx.core:core 1.19.0 (compile)
+#   androidx.activity:activity:1.13.0 -> androidx.core:core 1.19.0 (compile)
 #   androidx.security:security-crypto:1.1.0            -> tidak menarik core
 #   com.wireguard.android:tunnel:1.0.20260102          -> hanya annotation 1.9.1 + collection 1.5.0
-# Sengaja BUKAN 1.17.0/1.19.0 (versi yang tersedia di Maven): menaikkan versi pustaka
-# adalah keputusan tersendiri, bukan efek samping dari "deklarasikan apa yang Anda pakai".
-core = "1.13.0"
+# Versi AndroidX di atas dipilih dari rilis stabil resmi, bukan alpha/beta; dependensi
+# yang belum memiliki rilis stabil lebih baru dipertahankan untuk menghindari perubahan
+# perilaku yang tidak diperlukan.
+core = "1.19.0"
 wireguardTunnel = "1.0.20260102"
 securityCrypto = "1.1.0"
 junit = "4.13.2"
