@@ -4,7 +4,8 @@ from collections import deque
 
 ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "app/src/main/res"
-SOURCE = RES / "drawable/logo_velum_header.png"
+ASSETS = ROOT / "tools/assets"
+SOURCE = ASSETS / "logo_velum_header.png"
 DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 # Pusat geometris crop sedikit lebih tinggi daripada pusat visual monogram V.
 # Offset proporsional ini menjaga semua density, adaptive, dan notifikasi tetap seragam.
@@ -76,7 +77,8 @@ for density, size in DENSITIES.items():
     icon.save(directory / "ic_launcher_round.png", optimize=True)
 
 # Keep a reusable source crop for visual review and future deterministic rebuilds.
-mark.save(RES / "drawable/logo_velum_mark.png", optimize=True)
+ASSETS.mkdir(parents=True, exist_ok=True)
+mark.save(ASSETS / "logo_velum_mark.png", optimize=True)
 nodpi = RES / "drawable-nodpi"
 nodpi.mkdir(parents=True, exist_ok=True)
 foreground(108).save(nodpi / "logo_velum_mark_adaptive.png", optimize=True)

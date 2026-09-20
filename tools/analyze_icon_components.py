@@ -4,7 +4,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "app/src/main/res/drawable/logo_velum_mark.png"
+SOURCE = ROOT / "tools/assets/logo_velum_mark.png"
 
 image = Image.open(SOURCE).convert("RGBA")
 alpha = image.getchannel("A")
