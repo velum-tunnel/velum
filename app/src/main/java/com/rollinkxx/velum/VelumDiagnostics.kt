@@ -58,7 +58,8 @@ object VelumDiagnostics {
          * Umur PROSES ini dalam detik (`Process.getStartElapsedRealtime`). Bila angka ini
          * jauh lebih kecil daripada lamanya perangkat dibiarkan di latar, berarti proses
          * pernah mati dan lahir lagi — dan tunnel ikut mati bersamanya. Ini pengganti
-         * `dumpsys`/logcat untuk memeriksa daya tahan proses tanpa foreground service.
+         * `dumpsys`/logcat untuk memeriksa apakah proses foreground-service VPN sempat
+         * mati dan lahir kembali.
          */
         val processAgeSec: Long = 0,
         /** Rekaman percobaan sambung ulang otomatis terakhir; null bila belum pernah. */

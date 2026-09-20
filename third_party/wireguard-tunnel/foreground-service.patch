@@ -1,0 +1,74 @@
+[1mdiff --git a/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java b/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java[m
+[1mindex 196836d..d36332a 100644[m
+[1m--- a/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java[m
+[1m+++ b/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java[m
+[36m@@ -5,12 +5,16 @@[m
+ [m
+ package com.wireguard.android.backend;[m
+ [m
+[32m+[m[32mimport android.app.Notification;[m
+[32m+[m[32mimport android.app.NotificationChannel;[m
+[32m+[m[32mimport android.app.NotificationManager;[m
+ import android.content.Context;[m
+ import android.content.Intent;[m
+ import android.os.Build;[m
+ import android.os.ParcelFileDescriptor;[m
+ import android.system.OsConstants;[m
+ import android.util.Log;[m
+[32m+[m[32mimport android.content.pm.ServiceInfo;[m
+ [m
+ import com.wireguard.android.backend.BackendException.Reason;[m
+ import com.wireguard.android.backend.Tunnel.State;[m
+[36m@@ -380,6 +384,8 @@[m [mpublic final class GoBackend implements Backend {[m
+      */[m
+     public static class VpnService extends android.net.VpnService {[m
+         @Nullable private GoBackend owner;[m
+[32m+[m[32m        private static final int FOREGROUND_NOTIFICATION_ID = 0x564C;[m
+[32m+[m[32m        private static final String FOREGROUND_CHANNEL_ID = "velum_vpn";[m
+ [m
+         public Builder getBuilder() {[m
+             return new Builder();[m
+[36m@@ -389,6 +395,43 @@[m [mpublic final class GoBackend implements Backend {[m
+         public void onCreate() {[m
+             vpnService.complete(this);[m
+             super.onCreate();[m
+[32m+[m[32m            promoteToForeground();[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        /**[m
+[32m+[m[32m         * Android 8+ may stop a VPN service that remains background-only. The tunnel[m
+[32m+[m[32m         * library owns this service class, so promotion must happen here rather than[m
+[32m+[m[32m         * in the embedding application. `systemExempted` is the Android 14+ FGS type[m
+[32m+[m[32m         * explicitly permitted for VPN apps.[m
+[32m+[m[32m         */[m
+[32m+[m[32m        private void promoteToForeground() {[m
+[32m+[m[32m            final NotificationManager manager = getSystemService(NotificationManager.class);[m
+[32m+[m[32m            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {[m
+[32m+[m[32m                final NotificationChannel channel = new NotificationChannel([m
+[32m+[m[32m                        FOREGROUND_CHANNEL_ID,[m
+[32m+[m[32m                        "VPN",[m
+[32m+[m[32m                        NotificationManager.IMPORTANCE_LOW);[m
+[32m+[m[32m                channel.setShowBadge(false);[m
+[32m+[m[32m                manager.createNotificationChannel(channel);[m
+[32m+[m[32m            }[m
+[32m+[m[32m            final Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O[m
+[32m+[m[32m                    ? new Notification.Builder(this, FOREGROUND_CHANNEL_ID)[m
+[32m+[m[32m                    : new Notification.Builder(this);[m
+[32m+[m[32m            final Notification notification = builder[m
+[32m+[m[32m                    .setSmallIcon(getApplicationInfo().icon)[m
+[32m+[m[32m                    .setContentTitle("Velum VPN")[m
+[32m+[m[32m                    .setContentText("VPN aktif")[m
+[32m+[m[32m                    .setOngoing(true)[m
+[32m+[m[32m                    .setCategory(Notification.CATEGORY_SERVICE)[m
+[32m+[m[32m                    .build();[m
+[32m+[m[32m            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {[m
+[32m+[m[32m                startForeground([m
+[32m+[m[32m                        FOREGROUND_NOTIFICATION_ID,[m
+[32m+[m[32m                        notification,[m
+[32m+[m[32m                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED);[m
+[32m+[m[32m            } else {[m
+[32m+[m[32m                startForeground(FOREGROUND_NOTIFICATION_ID, notification);[m
+[32m+[m[32m            }[m
+         }[m
+ [m
+         @Override[m

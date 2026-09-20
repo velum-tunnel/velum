@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
 
     <!-- Batas visibilitas paket: hanya aplikasi peluncur yang perlu dibaca
          untuk layar pengecualian, tanpa izin QUERY_ALL_PACKAGES yang dibatasi. -->
@@ -75,29 +77,18 @@
         </receiver>
 
         <!-- VpnService milik library WireGuard; menjalankan tunnel Go di dalam proses aplikasi.
-
-             SENGAJA tanpa `android:foregroundServiceType` dan tanpa izin FOREGROUND_SERVICE*.
-             Buktinya, bukan dugaan: tidak ada satu pun pemanggilan `startForeground()` —
-             nol di aplikasi ini, dan nol di `GoBackend.java` pada sumber upstream tag
-             1.0.20260102 (library memulai layanan dengan `Context.startService` lalu
-             menunggu 2 detik, tanpa pernah mempromosikannya). Manifest library sendiri
-             juga tidak mendeklarasikan tipe apa pun, jadi atribut itu sepenuhnya berasal
-             dari repo ini. Sistem hanya memeriksa tipe SAAT `startForeground()` dipanggil
-             (`MissingForegroundServiceTypeException`), sehingga deklarasi itu inert — dan
-             menyatakan `specialUse` yang tidak dipakai justru menuntut pembenaran di Play
-             Console untuk sesuatu yang tidak ada.
-
-             Yang menahan proses tetap hidup selama tunnel UP adalah **VPN yang aktif**
-             (VpnService yang sudah `establish()`), bukan layanan latar depan. Bila kelak
-             layanan ini memang dipromosikan ke foreground, tipe yang benar untuk aplikasi
-             VPN adalah `systemExempted` — prasyarat runtime-nya di dokumentasi resmi
-             menyebut "VPN apps (configured using Settings > Network & Internet > VPN)" —
-             bukan `specialUse`. -->
+             Fork tunnel yang dibundel Velum memanggil startForeground() dari onCreate(),
+             sehingga deklarasi tipe dan permission ini aktif, bukan sekadar metadata.
+             systemExempted adalah tipe yang didokumentasikan Android untuk aplikasi VPN.
+             Notifikasi foreground dibuat oleh service library dan tetap ada selama tunnel
+             aktif; notifikasi status aplikasi tetap dipakai untuk tampilan tambahan. -->
         <service
             android:name="com.wireguard.android.backend.GoBackend$VpnService"
             android:exported="false"
             tools:node="merge"
-            android:permission="android.permission.BIND_VPN_SERVICE">
+            tools:ignore="ForegroundServicePermission"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:foregroundServiceType="systemExempted">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
