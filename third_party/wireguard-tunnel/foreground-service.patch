@@ -1,5 +1,5 @@
 diff --git a/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java b/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java
-index 196836d..c06a846 100644
+index 196836d..20ce4b6 100644
 --- a/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java
 +++ b/tunnel/src/main/java/com/wireguard/android/backend/GoBackend.java
 @@ -5,6 +5,10 @@
@@ -25,7 +25,7 @@ index 196836d..c06a846 100644
  
          public Builder getBuilder() {
              return new Builder();
-@@ -389,6 +398,55 @@ public final class GoBackend implements Backend {
+@@ -389,6 +398,57 @@ public final class GoBackend implements Backend {
          public void onCreate() {
              vpnService.complete(this);
              super.onCreate();
@@ -53,7 +53,9 @@ index 196836d..c06a846 100644
 +                    : new Notification.Builder(this);
 +            final Intent openAppIntent = new Intent(Intent.ACTION_MAIN)
 +                    .addCategory(Intent.CATEGORY_LAUNCHER)
-+                    .setClassName(getPackageName(), getPackageName() + ".MainActivity")
++                    // The applicationId has .debug/.preview suffixes, but the
++                    // manifest class remains in the stable Java package.
++                    .setClassName(getPackageName(), "com.rollinkxx.velum.MainActivity")
 +                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
 +            final PendingIntent contentIntent = PendingIntent.getActivity(
 +                    this,
