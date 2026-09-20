@@ -6,6 +6,8 @@ on:
     paths-ignore:
       - "**.md"
       - "docs/**"
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 
 concurrency:
@@ -209,11 +211,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-	      - name: Setup Android SDK
-	        uses: android-actions/setup-android@v4
-	        with:
-	          # Gunakan paket SDK yang sama dengan job verifikasi.
-	          packages: "platform-tools platforms;android-37 build-tools;36.0.0"
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          # Gunakan paket SDK yang sama dengan job verifikasi.
+          packages: "platform-tools platforms;android-37 build-tools;36.0.0"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
