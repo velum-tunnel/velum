@@ -25,11 +25,12 @@ jobs:
   # sekali dan tugas berikutnya memakai ulang cache konfigurasi & build yang panas.
   #
   # Urutan sengaja: unit test dulu (paling cepat gagal, paling murah), lalu
-  # assembleDebug (pemblokir utama), lalu lint (advisori, tidak boleh menggagalkan
-  # job — karena itu `continue-on-error` per-step, bukan per-job).
+  # assembleDebug (pemblokir utama), lalu lint (warning advisori, tetapi error
+  # tetap harus menggagalkan job).
   verify:
     name: verifikasi (build, tes, lint)
-    runs-on: ubuntu-latest
+    # Pin runner agar migrasi label ubuntu-latest tidak mengubah toolchain CI.
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
@@ -207,7 +208,8 @@ jobs:
   # dan variable repository ENABLE_RELEASE_SIGNING=true. Tanpa itu job di-skip.
   release:
     name: assembleRelease (bertanda tangan)
-    runs-on: ubuntu-latest
+    # Samakan runner release dengan job verifikasi untuk hasil yang deterministik.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: [verify]
     if: vars.ENABLE_RELEASE_SIGNING == 'true'

@@ -42,12 +42,13 @@ permissions:
 jobs:
   konsistensi:
     name: konsistensi dokumen
-    runs-on: ubuntu-latest
+    # Pin runner agar migrasi label ubuntu-latest tidak mengubah pemeriksaan dokumen.
+    runs-on: ubuntu-24.04
     steps:
       - name: Ambil kode
         uses: actions/checkout@v7
 
-      # Sengaja tanpa actions/setup-python: python3 sudah ada di image ubuntu-latest,
+      # Sengaja tanpa actions/setup-python: python3 sudah ada di image ubuntu-24.04,
       # dan menambah action berarti menambah dependensi + waktu untuk nol manfaat.
       - name: Gerbang konsistensi dokumen
         run: python3 .github/scripts/periksa-dokumen.py

@@ -45,7 +45,8 @@ permissions:
 jobs:
   analyze:
     name: Analisis CodeQL (java-kotlin)
-    runs-on: ubuntu-latest
+    # Pin runner agar migrasi label ubuntu-latest tidak mengubah toolchain analisis.
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
 
     permissions:

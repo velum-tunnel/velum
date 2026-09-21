@@ -6,7 +6,7 @@ Direktori ini menyimpan laporan audit yang terikat pada commit tertentu. Laporan
 
 | Tanggal | Commit yang diaudit | Scope | Temuan utama | Status |
 |---|---|---|---|---|
-| 2026-09-21 | `45e72840eec5019b5fe0e0a20ed2946a8628929e` | Comprehensive repository audit | `BUG-CI-001`; runtime/device testing gap; residual network and lifecycle risks | `BUG-CI-001` diperbaiki secara lokal; verifikasi GitHub Actions dan device masih pending |
+| 2026-09-21 | `45e72840eec5019b5fe0e0a20ed2946a8628929e` | Comprehensive repository audit | `BUG-CI-001`; runtime/device testing gap; residual network and lifecycle risks | `BUG-CI-001` telah diverifikasi di GitHub Actions pada commit remediation `f72669a`; verifikasi device masih pending |
 
 ## Laporan dan ledger
 
