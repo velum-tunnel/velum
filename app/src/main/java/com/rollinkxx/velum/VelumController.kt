@@ -421,8 +421,18 @@ class VelumController(context: Context, private val ui: Ui) {
         onUi { ui.setStatusText(R.string.status_disconnecting) }
         ReconnectMonitor.stop(app)
         submit(worker) {
-            runCatching { VelumTunnel.down(app) }
-            onUi { setBusy(false); applyState(VelumTunnel.state) }
+            try {
+                VelumTunnel.down(app)
+                onUi { setBusy(false); applyState(VelumTunnel.state) }
+            } catch (e: Exception) {
+                // A failed shutdown means the system may still be routing traffic through
+                // the VPN. Keep the real state visible and make the failure actionable.
+                onUi {
+                    setBusy(false)
+                    applyState(VelumTunnel.state)
+                    ui.setMessage(messageFor(R.string.err_disconnect, e))
+                }
+            }
         }
     }
 
@@ -434,14 +444,24 @@ class VelumController(context: Context, private val ui: Ui) {
         cancelPendingTest()
         ReconnectMonitor.stop(app)
         submit(worker) {
-            runCatching { VelumTunnel.down(app) }
-            VelumApi.unregister(prefs)
-            onUi {
-                setBusy(false)
-                applyState(Tunnel.State.DOWN)
-                ui.refreshStaticInfo()
-                ui.showTest(prefs.lastTest) // registrasi dihapus → hasil uji lama ikut hilang
-                ui.setMessageRes(R.string.reset_done)
+            try {
+                // Do not unregister until the system VPN has actually been stopped.
+                // Otherwise a failed down() leaves live traffic with deleted credentials.
+                VelumTunnel.down(app)
+                VelumApi.unregister(prefs)
+                onUi {
+                    setBusy(false)
+                    applyState(Tunnel.State.DOWN)
+                    ui.refreshStaticInfo()
+                    ui.showTest(prefs.lastTest) // registrasi dihapus → hasil uji lama ikut hilang
+                    ui.setMessageRes(R.string.reset_done)
+                }
+            } catch (e: Exception) {
+                onUi {
+                    setBusy(false)
+                    applyState(VelumTunnel.state)
+                    ui.setMessage(messageFor(R.string.err_reset, e))
+                }
             }
         }
     }

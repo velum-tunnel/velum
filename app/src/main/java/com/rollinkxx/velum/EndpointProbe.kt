@@ -259,6 +259,10 @@ object EndpointProbe {
 
     /** RTTms koneksi TCP, atau -1 bila gagal. */
     private fun tcpRttMs(host: String): Long {
+        // InetAddress.getByName/getAllByName can ignore interruption while the platform
+        // resolver waits on DNS. Probe candidates are supplied as IP literals (DoH and
+        // the built-in list); skip a domain here rather than leaking an invokeAll worker.
+        if (!VelumFormat.isIpLiteral(host)) return -1
         val start = SystemClock.elapsedRealtime()
         return try {
             Socket().use { s -> s.connect(InetSocketAddress(host, PROBE_PORT), CONNECT_TIMEOUT_MS) }
