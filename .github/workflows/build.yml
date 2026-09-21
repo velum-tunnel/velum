@@ -110,12 +110,10 @@ jobs:
             python3 .github/scripts/anotasikan-log.py "$RUNNER_TEMP/preview.log"
           fi
 
-      # ADVISORI: temuan lint tidak boleh menggagalkan job (lihat AGENTS.md §5),
-      # tetapi tetap dijaga hijau. continue-on-error dipasang di step ini saja.
-      - name: Lint debug (advisori)
+      # Warning lint tetap advisori, tetapi error lint harus menggagalkan job.
+      - name: Lint debug
         id: lint
         if: always() && steps.assemble.conclusion != 'cancelled'
-        continue-on-error: true
         run: ./gradlew --no-daemon --stacktrace lintDebug
 
       - name: Tampilkan temuan lint
