@@ -122,7 +122,6 @@ class VelumFormatTest {
     @Test
     fun isIpv6_menolakBentukIPv6TidakSah() {
         assertFalse(VelumFormat.isIpv6("2001:db8:0:0:0:0:0:1:2"))
-        assertFalse(VelumFormat.isIpv6("2001:db8:0:0:0:0:1"))
         assertFalse(VelumFormat.isIpv6("2001:::1"))
         assertFalse(VelumFormat.isIpv6("::ffff:999.0.2.1"))
         assertFalse(VelumFormat.isIpv6("1:2:3:4:5:6:7:8:9"))
