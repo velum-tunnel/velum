@@ -107,6 +107,27 @@ class VelumFormatTest {
         assertFalse(VelumFormat.isIpLiteral(""))
     }
 
+    @Test
+    fun isIpv6_hanyaMenerimaLiteralDanTidakMelakukanResolusiDomain() {
+        assertTrue(VelumFormat.isIpv6("2001:db8::1"))
+        assertTrue(VelumFormat.isIpv6("::ffff:192.0.2.1"))
+        // Nama domain, termasuk domain yang lazim memiliki AAAA record, bukan literal.
+        assertFalse(VelumFormat.isIpv6("ipv6.google.com"))
+        assertFalse(VelumFormat.isIpv6("engage.cloudflareclient.com"))
+        assertFalse(VelumFormat.isIpv6("192.0.2.1"))
+        assertFalse(VelumFormat.isIpv6("[2001:db8::1]"))
+        assertFalse(VelumFormat.isIpv6("fe80::1%wlan0"))
+    }
+
+    @Test
+    fun isIpv6_menolakBentukIPv6TidakSah() {
+        assertFalse(VelumFormat.isIpv6("2001:db8:0:0:0:0:0:1:2"))
+        assertFalse(VelumFormat.isIpv6("2001:db8:0:0:0:0:0:1"))
+        assertFalse(VelumFormat.isIpv6("2001:::1"))
+        assertFalse(VelumFormat.isIpv6("::ffff:999.0.2.1"))
+        assertFalse(VelumFormat.isIpv6("1:2:3:4:5:6:7:8:9"))
+    }
+
     // ---------- ditambahkan 2026-09-13 untuk baris diagnostik baru ----------
 
     @Test

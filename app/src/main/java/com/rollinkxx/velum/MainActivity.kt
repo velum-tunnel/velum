@@ -563,6 +563,7 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
     }
 
     private fun startPulse() {
+        if (!visible || controller.state != Tunnel.State.UP) return
         stopPulse()
         pulse = ValueAnimator.ofFloat(1f, 0.3f).apply {
             duration = 900

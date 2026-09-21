@@ -1,7 +1,5 @@
 package com.rollinkxx.velum
 
-import java.net.Inet6Address
-import java.net.InetAddress
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -145,13 +143,43 @@ object VelumFormat {
         }
     }
 
-    /** Literal IPv6 sah tanpa nama zona (`%wlan0`) atau kurung siku. */
+    /**
+     * Literal IPv6 sah tanpa nama zona (`%wlan0`) atau kurung siku.
+     *
+     * Parser ini sengaja hanya memeriksa sintaks. `InetAddress.getByName()` tidak
+     * boleh dipakai di sini karena akan melakukan DNS lookup untuk nama domain,
+     * sehingga helper murni ini dapat memblokir worker probe dan menganggap domain
+     * dengan AAAA record sebagai literal IPv6.
+     */
     fun isIpv6(s: String): Boolean {
         if (s.isEmpty() || ':' !in s || '%' in s || '[' in s || ']' in s) return false
-        return try {
-            InetAddress.getByName(s) is Inet6Address
-        } catch (_: Exception) {
-            false
+        val compression = s.indexOf("::")
+        if (compression != -1 && compression != s.lastIndexOf("::")) return false
+
+        val groups = if (compression == -1) {
+            s.split(':')
+        } else {
+            val left = s.substring(0, compression).takeUnless { it.isEmpty() }?.split(':').orEmpty()
+            val right = s.substring(compression + 2).takeUnless { it.isEmpty() }?.split(':').orEmpty()
+            left + right
+        }
+        if (groups.any { it.isEmpty() }) return false
+
+        val hasIpv4Tail = groups.any { '.' in it }
+        if (hasIpv4Tail) {
+            val ipv4 = groups.lastOrNull() ?: return false
+            if (!s.endsWith(ipv4) || !isIpv4(ipv4)) return false
+        }
+        if (groups.any { '.' !in it && (it.length > 4 || it.any { c -> c !in "0123456789abcdefABCDEF" }) }) {
+            return false
+        }
+        val hexGroupCount = groups.count { '.' !in it }
+        val addressGroupCount = hexGroupCount + if (hasIpv4Tail) 2 else 0
+        return if (compression == -1) {
+            addressGroupCount == 8
+        } else {
+            // `::` must stand for at least one omitted 16-bit group.
+            addressGroupCount < 8
         }
     }
 
