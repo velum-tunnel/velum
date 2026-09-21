@@ -594,10 +594,11 @@ class MainActivity : AppCompatActivity(), VelumController.Ui {
             val nowMs = SystemClock.elapsedRealtime()
             val rates = rate.add(t.rxBytes, t.txBytes, nowMs)
             setTextIfChanged(infoData, renderData(rates, t.rxBytes, t.txBytes))
-            if (t.rxBytes != lastRxBytes || t.txBytes != lastTxBytes) {
+            if (VelumTrafficDecision.trafficResumed(t.rxBytes, lastRxBytes, t.txBytes, lastTxBytes)) {
                 lastRxBytes = t.rxBytes
                 lastTxBytes = t.txBytes
                 lastTrafficMs = nowMs
+                if (staleWarned) renderMessage("")
                 staleWarned = false
                 return@runStats
             }

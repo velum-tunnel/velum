@@ -77,7 +77,7 @@ object VelumTunnel : Tunnel {
     }
 
     /** DOWN yang diminta aplikasi tidak boleh dianggap pencabutan eksternal oleh Settings. */
-    private val expectedDownTransitions = AtomicInteger(0)
+    private val expectedDownTransitions = ExpectedDownTransitions()
     private val stateLock = Any()
 
     /**
@@ -158,7 +158,7 @@ object VelumTunnel : Tunnel {
         appContext?.let(StatusNotifier::hide)
         callback?.invoke(newState)
         if (newState == Tunnel.State.DOWN) {
-            val expected = consumeExpectedDown()
+            val expected = expectedDownTransitions.consume()
             appContext?.let { ctx ->
                 if (!expected && previous == Tunnel.State.UP) {
                     // GoBackend tidak menjatuhkan interface hanya karena jaringan putus;
@@ -173,20 +173,8 @@ object VelumTunnel : Tunnel {
         }
     }
 
-    private fun expectDown() {
-        expectedDownTransitions.incrementAndGet()
-    }
-
     private fun cancelExpectedDown() {
-        expectedDownTransitions.updateAndGet { (it - 1).coerceAtLeast(0) }
-    }
-
-    private fun consumeExpectedDown(): Boolean {
-        while (true) {
-            val current = expectedDownTransitions.get()
-            if (current <= 0) return false
-            if (expectedDownTransitions.compareAndSet(current, current - 1)) return true
-        }
+        expectedDownTransitions.cancel()
     }
 
     private fun backend(context: Context): GoBackend {
@@ -219,7 +207,7 @@ object VelumTunnel : Tunnel {
     @Synchronized
     @Throws(Exception::class)
     fun down(context: Context) {
-        expectDown()
+        expectedDownTransitions.expectIfUp(state == Tunnel.State.UP)
         try {
             backend(context).setState(this, Tunnel.State.DOWN, null)
         } catch (e: Exception) {
@@ -243,7 +231,7 @@ object VelumTunnel : Tunnel {
     @Throws(Exception::class)
     fun restart(context: Context, prefs: Prefs, shouldContinue: () -> Boolean = { prefs.wasUp }) {
         val b = backend(context)
-        expectDown()
+        expectedDownTransitions.expectIfUp(state == Tunnel.State.UP)
         try {
             b.setState(this, Tunnel.State.DOWN, null)
         } catch (e: Exception) {

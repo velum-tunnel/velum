@@ -83,6 +83,8 @@
     <string name="err_vpn_denied">Izin VPN ditolak</string>
     <string name="err_register">Registrasi gagal: %1$s</string>
     <string name="err_connect">Gagal menyambung: %1$s</string>
+    <string name="err_disconnect">Gagal memutuskan VPN: %1$s. VPN mungkin masih aktif; coba lagi.</string>
+    <string name="err_reset">Gagal memutuskan VPN, sehingga registrasi tidak dihapus: %1$s. Coba lagi.</string>
     <!-- Kegagalan khas Android 16+: sistem menutup/menolak layanan latar depan. -->
     <string name="err_connect_closed">Sambungan ditutup sistem. Periksa "Always-on VPN" dan blokir koneksi tanpa VPN pada pengaturan VPN, lalu coba lagi.</string>
     <string name="err_network">Kesalahan jaringan: %1$s</string>
