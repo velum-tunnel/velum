@@ -1,6 +1,6 @@
 # Satu-satunya sumber kebenaran versi dependensi & plugin (lihat AGENTS.md §4).
 [versions]
-agp = "9.4.0"
+agp = "9.4.1"
 compileSdk = "37"
 targetSdk = "36"
 minSdk = "24"
