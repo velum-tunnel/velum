@@ -18,7 +18,7 @@ activity = "1.13.0"
 # Versi AndroidX di atas dipilih dari rilis stabil resmi, bukan alpha/beta; dependensi
 # yang belum memiliki rilis stabil lebih baru dipertahankan untuk menghindari perubahan
 # perilaku yang tidak diperlukan.
-core = "1.19.0"
+core = "1.19.1"
 wireguardTunnel = "1.0.20260102"
 securityCrypto = "1.1.0"
 junit = "4.13.2"
